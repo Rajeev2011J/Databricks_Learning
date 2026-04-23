@@ -1,0 +1,20 @@
+# Test Requirements for RDM Test Data Generator
+# Install with: pip install -r test_requirements.txt
+
+# Testing Framework
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-xdist>=3.3.1  # For parallel test execution
+pytest-json-report>=1.5.0  # For JSON test reports
+
+# PySpark
+pyspark>=3.4.0
+
+# Data Generation
+dbldatagen>=0.3.0
+Faker>=19.0.0
+
+# Optional: Code quality and formatting
+# black>=23.0.0
+# flake8>=6.0.0
+# mypy>=1.0.0
