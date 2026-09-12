@@ -1,0 +1,4 @@
+streamlit==1.56.0
+openai==1.57.1
+azure-identity==1.19.0
+azure-ai-documentintelligence==1.0.2

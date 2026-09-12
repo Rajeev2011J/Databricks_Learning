@@ -1,0 +1,60 @@
+# =============================================================================
+# requirements-dev.txt
+# Development and test dependencies for all Databricks Asset Bundles.
+#
+# Install:  pip install -r requirements-dev.txt
+#
+# Notes:
+#  - pyspark version must match the Spark version on your clusters.
+#    Current cluster runtime: 14.3 LTS  → Spark 3.5.0  → pyspark==3.5.0
+#    Unity Catalog clusters:  17.3 LTS  → Spark 3.5.2  → pyspark==3.5.2
+#    Pin to 3.5.0 for the widest compatibility across both cluster generations.
+#  - delta-spark version must be compatible with pyspark (see compatibility matrix:
+#    https://docs.delta.io/latest/releases.html)
+#  - databricks-sdk is needed so that `from databricks.sdk.runtime import ...`
+#    resolves at import time (we stub it, but the package must be present).
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Core test runner
+# ---------------------------------------------------------------------------
+pytest==8.3.5
+pytest-cov==6.1.0          # coverage integration
+pytest-mock==3.14.0        # mocker fixture (wraps unittest.mock)
+
+# ---------------------------------------------------------------------------
+# PySpark — local mode for Spark unit tests
+# ---------------------------------------------------------------------------
+pyspark==3.5.0
+
+# Delta Lake support in local Spark tests
+delta-spark==3.2.1
+
+# ---------------------------------------------------------------------------
+# DataFrame assertion libraries
+# ---------------------------------------------------------------------------
+# chispa: concise DataFrame equality assertions for PySpark
+chispa==0.10.2
+
+# ---------------------------------------------------------------------------
+# Databricks SDK — required so src imports resolve (we mock the runtime parts)
+# ---------------------------------------------------------------------------
+databricks-sdk==0.32.0
+
+# ---------------------------------------------------------------------------
+# Build tools (wheel packaging used by setup.py in radarv1 / GCOB_Reportingv1)
+# ---------------------------------------------------------------------------
+setuptools==75.8.2
+wheel==0.45.1
+
+# ---------------------------------------------------------------------------
+# Optional quality-of-life plugins
+# ---------------------------------------------------------------------------
+pytest-sugar==1.0.0        # progress bar in terminal output
+pytest-xdist==3.6.1        # parallel test execution: pytest -n auto
+pytest-timeout==2.3.1      # mark tests with @pytest.mark.timeout(30)
+
+# ---------------------------------------------------------------------------
+# Linting / formatting (not required to run tests, useful in CI)
+# ---------------------------------------------------------------------------
+ruff==0.6.9

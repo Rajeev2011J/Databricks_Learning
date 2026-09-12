@@ -1,0 +1,55 @@
+variables:
+  med_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "radar-medium"
+
+resources:
+  jobs:
+    sira_historical_load:
+      name: sira_historical_load
+      
+      permissions:
+        - level: CAN_MANAGE
+          user_name: mattia.didone@rabobank.com
+        - level: CAN_MANAGE
+          user_name: lucija.marjanovic@rabobank.nl
+        - level: CAN_MANAGE
+          user_name: casey.wong@rabobank.nl
+
+      health:
+        rules:
+          - metric: RUN_DURATION_SECONDS
+            op: GREATER_THAN
+            value: 5400
+
+      email_notifications:
+        on_failure:
+          - mattia.didone@rabobank.com
+          - fm.nl.utrecht.kycdataadmin@rabobank.com
+
+      tasks:
+        - task_key: fetch_dates_for_historical_load
+          notebook_task:
+            notebook_path: ../src/historical_datasets/dates_for_historical_sira.ipynb
+            base_parameters:
+              start_date: "20240101"
+            source: WORKSPACE
+          existing_cluster_id: ${var.med_cluster_id}
+
+        - task_key: sira_historical_load
+          depends_on:
+            - task_key: fetch_dates_for_historical_load
+          for_each_task:
+            inputs: "{{tasks.fetch_dates_for_historical_load.values.dates_list}}"
+            task:
+              task_key: sira_historical_load_iteration
+              notebook_task:
+                notebook_path: ../src/historical_datasets/sira__HISTORICAL.py
+                base_parameters:
+                  date_param: "{{input}}"
+                source: WORKSPACE
+              existing_cluster_id: ${var.med_cluster_id}
+              
+      queue:
+        enabled: true

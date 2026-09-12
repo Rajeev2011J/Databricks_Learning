@@ -1,0 +1,62 @@
+# The job for RadarDataModel dataobjects
+variables:
+  dab_small_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "DAB-small"
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+resources:
+  jobs:
+    log_extraction_job:
+      name: log_extraction_job
+
+      schedule:
+        quartz_cron_expression: 0 */15 8-14 * * ? *
+        timezone_id: Asia/Kolkata
+        pause_status: UNPAUSED
+
+      tasks:
+        - task_key: Log_extraction
+          notebook_task:
+            notebook_path: ../RadarDataModel/Log_extraction.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+
+      tags:
+        Asset Bundle: ""
+      queue:
+        enabled: true
+
+targets:
+  prod:
+    default: true
+    resources:
+      jobs:
+        log_extraction_job:
+          name: log_extraction_job
+          schedule:
+            quartz_cron_expression: '0 */15 8-14 * * ? *'
+            timezone_id: Asia/Kolkata
+
+          email_notifications:
+            on_failure:
+              - ruud.van.laar@rabobank.com
+              - fm.global.KYCReportingSupport@rabobank.com
+  preprd:
+    default: true
+    resources:
+      jobs:
+        log_extraction_job:
+          name: log_extraction_job
+          schedule:
+            quartz_cron_expression: '0 */15 8-14 * * ? *'
+            timezone_id: Asia/Kolkata
+  dev:
+    default: true
+    resources:
+      jobs:
+        log_extraction_job:
+          name: log_extraction_job
+          schedule:
+            quartz_cron_expression: '0 */15 8-14 * * ? *'
+            timezone_id: Asia/Kolkata

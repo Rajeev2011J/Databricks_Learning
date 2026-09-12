@@ -1,0 +1,60 @@
+variables:
+  med_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "radar-medium"
+
+resources:
+  jobs:
+    planet_historical_load:
+      name: planet_historical_load
+      
+      permissions:
+        - level: CAN_MANAGE
+          user_name: lucija.marjanovic@rabobank.nl
+        - level: CAN_MANAGE
+          user_name: casey.wong@rabobank.nl
+        - level: CAN_MANAGE
+          user_name: Mattia.Didone@rabobank.com
+          
+      health:
+        rules:
+          - metric: RUN_DURATION_SECONDS
+            op: GREATER_THAN
+            value: 5400
+
+      schedule:
+        quartz_cron_expression: 0 0 7 L * ?
+        timezone_id: Europe/Amsterdam
+        pause_status: ${var.BUNDLE_VAR_trigger_pause_status}      
+
+      email_notifications:
+        on_failure:
+          - lucija.marjanovic@rabobank.nl
+          - fm.nl.utrecht.kycdataadmin@rabobank.com
+
+      tasks:
+        - task_key: fetch_dates_for_historical_load
+          notebook_task:
+            notebook_path: ../src/historical_datasets/dates_for_historical_planet.ipynb
+            base_parameters:
+              start_date: "20260101"
+            source: WORKSPACE
+          existing_cluster_id: ${var.med_cluster_id}
+
+        - task_key: planet_historical_load
+          depends_on:
+            - task_key: fetch_dates_for_historical_load
+          for_each_task:
+            inputs: "{{tasks.fetch_dates_for_historical_load.values.dates_list}}"
+            task:
+              task_key: planet_historical_load_iteration
+              notebook_task:
+                notebook_path: ../src/historical_datasets/planet__HISTORICAL.ipynb
+                base_parameters:
+                  date_param: "{{input}}"
+                source: WORKSPACE
+              existing_cluster_id: ${var.med_cluster_id}
+              
+      queue:
+        enabled: true

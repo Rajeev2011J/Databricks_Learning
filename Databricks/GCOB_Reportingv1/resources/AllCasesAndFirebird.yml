@@ -1,0 +1,66 @@
+# The main job for Firebird
+variables:
+  med_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "radar-medium"
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+resources:
+  jobs:
+    CasesAndFirebird:
+      name: CasesAndFirebird
+
+      schedule:
+        quartz_cron_expression: 27 30 7 * * ?
+        timezone_id: Europe/Amsterdam
+        pause_status: PAUSED
+          
+      tasks:
+        - task_key: AllRelationship
+          notebook_task:
+            notebook_path: ../src/AllRelationship.py
+          existing_cluster_id: ${var.med_cluster_id}
+        - task_key: BusinessActivities
+          notebook_task:
+            notebook_path: ../src/BusinessActivities.py
+          existing_cluster_id: ${var.med_cluster_id}
+        - task_key: CddRisk_Report
+          notebook_task:
+            notebook_path: ../src/CddRisk.py
+          existing_cluster_id: ${var.med_cluster_id}
+        # - task_key: FireBird_Cases_Clients
+        #   notebook_task:
+        #     notebook_path: ../src/Client-Cases-Product-GlobalFile.py
+        #   existing_cluster_id: ${var.med_cluster_id}
+        - task_key: MI_AllCasesReport
+          notebook_task:
+            notebook_path: ../src/MI-Cases-Product.py
+          existing_cluster_id: ${var.med_cluster_id}
+        - task_key: WorkItem-FatcaCrs-Document
+          notebook_task:
+            notebook_path: ../src/WorkItem-Documents-FatcaCrs-ClientOwner-SystemIdentifier.py
+          existing_cluster_id: ${var.med_cluster_id}
+        - task_key: UBO
+          notebook_task:
+            notebook_path: ../src/BusinessActivities.py
+          existing_cluster_id: ${var.med_cluster_id}
+      queue:
+        enabled: true
+
+targets:
+  prod:
+    default: true
+    resources:
+      jobs:
+        CasesAndFirebird:
+          name: CasesAndFirebird
+
+          email_notifications:
+            on_failure:
+              - ruud.van.laar@rabobank.com
+              - fm.global.KYCReportingSupport@rabobank.com
+  preprd:
+    default: true
+  dev:
+    default: true

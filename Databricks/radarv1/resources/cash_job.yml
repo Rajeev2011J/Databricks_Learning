@@ -1,0 +1,53 @@
+# The main job for cash
+
+variables:
+  med_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "radar-medium"
+  # trigger_paused_status: 
+  #   description: PAUSED OR UNPAUSED
+  #   default: PAUSED
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+
+resources:
+  jobs:
+    cash_job:
+      name: cash_job
+
+      permissions:
+        - level: CAN_MANAGE
+          user_name: mattia.didone@rabobank.com
+        - level: CAN_MANAGE
+          user_name: casey.wong@rabobank.nl
+        - level: CAN_MANAGE
+          user_name: Lucija.Marjanovic@rabobank.nl
+
+      health:
+        rules:
+          - metric: RUN_DURATION_SECONDS
+            op: GREATER_THAN
+            value: 3000
+
+      schedule:
+        quartz_cron_expression: 0 0 14 ? * SUN *
+        timezone_id: Europe/Amsterdam
+        pause_status: ${var.BUNDLE_VAR_trigger_pause_status}
+
+      email_notifications:
+        on_failure:
+          - mattia.didone@rabobank.com
+          - fm.nl.utrecht.kycdataadmin@rabobank.com
+        # on_duration_warning_threshold_exceeded:
+        #   - mattia.didone@rabobank.com
+        #   - fm.nl.utrecht.kycdataadmin@rabobank.com
+          
+      tasks:
+        - task_key: cash_createtable__weekly
+          notebook_task:
+            notebook_path: ../src/cash_createtable__weekly.py
+          existing_cluster_id: ${var.med_cluster_id}
+        
+      queue:
+        enabled: true

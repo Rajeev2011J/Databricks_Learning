@@ -1,0 +1,7 @@
+{
+    "environment": "dev",
+    "catalog_name": "wr_fj_parties_and_risk_assessment_dev",
+    "workspacename":  "dbws-wr-radar-dev",
+    "workspaceurl":  "adb-3634536606298227.7.azuredatabricks.net/",
+    "catalog_owner": "reg-dev-global-wrkycif"
+}

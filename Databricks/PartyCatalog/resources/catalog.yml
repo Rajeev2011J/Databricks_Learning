@@ -1,0 +1,21 @@
+resources:
+  catalogs:
+    radar:
+      name: {var.catalog_name}
+      comment: Parties and assessments catalog
+      owner: {var.catalog_owner}
+      grants:
+        - principal: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+          privileges:
+            - USE catalog
+            - USE SCHEMA
+            - CREATE FUNCTION
+            - CREATE MATERIALIZED VIEW
+            - CREATE MODEL
+            - CREATE TABLE
+            - CREATE SCHEMA
+            - MANAGE
+            - REFRESH
+            - MODIFY
+            - SELECT
+

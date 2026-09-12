@@ -1,0 +1,7 @@
+{
+    "environment": "dprod",
+    "catalog_name": "wr_fj_parties_and_risk_assessment_prod",
+    "workspacename":  "dbws-wr-radar-prod",
+    "workspaceurl":  "adb-2426369368647006.6.azuredatabricks.net/",
+    "catalog_owner": "reg-prd-global-wrkycif"
+}

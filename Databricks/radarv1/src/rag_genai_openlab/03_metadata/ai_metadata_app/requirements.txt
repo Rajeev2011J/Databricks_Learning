@@ -1,0 +1,7 @@
+streamlit
+openai==1.56.2
+azure-identity==1.19.0
+databricks-sql-connector
+databricks-sdk
+pandas
+pyarrow

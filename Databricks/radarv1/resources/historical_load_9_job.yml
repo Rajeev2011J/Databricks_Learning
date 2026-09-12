@@ -1,0 +1,65 @@
+# The job for RadarDataModel dataobjects
+variables:
+  dab_small_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "DAB-small"
+# reference this as: existing_cluster_id: ${var.dab_medium_cluster_id}
+
+resources:
+  jobs:
+    historical_load_9_job:
+      name: historical_load_9_job
+
+      permissions:
+        - level: CAN_MANAGE
+          user_name: sowmyashree.parashivamurthy.sudha@rabobank.com
+          
+      schedule:
+        quartz_cron_expression:  0 45 6 * * ?
+        timezone_id: Europe/Amsterdam
+        pause_status: PAUSED
+
+      tasks:
+        - task_key: historical_load9
+          notebook_task:
+            notebook_path: ../RadarDataModel/RadarDataModel_Version3/Historical_Load_9.py
+          base_parameters:
+            start_date:""
+            end_date:""
+          existing_cluster_id: ${var.dab_small_cluster_id}
+
+      tags:
+        Asset Bundle: ""
+      queue:
+        enabled: true
+
+targets:
+  prod:
+    default: true
+    resources:
+      jobs:
+        historical_load_9_job:
+          name: historical_load_9_job
+          schedule:
+            quartz_cron_expression: '0 45 6 * * ?'
+            timezone_id: Europe/Amsterdam
+
+  preprd:
+    default: true
+    resources:
+      jobs:
+        historical_load_9_job:
+          name: historical_load_9_job
+          schedule:
+            quartz_cron_expression: '0 45 7 * * ?'
+            timezone_id: Europe/Amsterdam
+  dev:
+    default: true
+    resources:
+      jobs:
+        historical_load_9_job:
+          name: historical_load_9_job
+          schedule:
+            quartz_cron_expression: '0 45 6 * * ?'
+            timezone_id: Europe/Amsterdam

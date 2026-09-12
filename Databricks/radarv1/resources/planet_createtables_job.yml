@@ -1,0 +1,48 @@
+# The main job for planet_createtables
+
+variables:
+  med_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "radar-medium"
+  # trigger_paused_status: 
+  #   description: PAUSED OR UNPAUSED
+  #   default: PAUSED
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+
+resources:
+  jobs:
+    planet_createtables_job:
+      name: planet_createtables_job
+
+      permissions:
+        - level: CAN_MANAGE
+          user_name: mattia.didone@rabobank.com
+        - level: CAN_MANAGE
+          user_name: casey.wong@rabobank.nl
+        - level: CAN_MANAGE
+          user_name: Lucija.Marjanovic@rabobank.nl
+          
+      health:
+        rules:
+          - metric: RUN_DURATION_SECONDS
+            op: GREATER_THAN
+            value: 3600
+
+      email_notifications:
+        on_failure:
+          - mattia.didone@rabobank.com
+          - fm.nl.utrecht.kycdataadmin@rabobank.com
+        # on_duration_warning_threshold_exceeded:
+        #   - mattia.didone@rabobank.com
+        #   - fm.nl.utrecht.kycdataadmin@rabobank.com
+          
+      tasks:
+        - task_key: planet_createtables
+          notebook_task:
+            notebook_path: ../src/planet_createtables.py
+          existing_cluster_id: ${var.med_cluster_id}
+        
+      queue:
+        enabled: true

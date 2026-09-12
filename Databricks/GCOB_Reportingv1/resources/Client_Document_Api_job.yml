@@ -1,0 +1,63 @@
+variables:
+  dab_medium_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "DAB-medium"
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+resources:
+  jobs:
+    Client_Document_API_job:
+      name: Client_Document_API_job
+
+      schedule:
+        # Run every day at 7:00:00 AM
+        quartz_cron_expression: '00 00 7 * * ?'
+        timezone_id: Europe/Amsterdam
+        pause_status: PAUSED
+
+
+      tasks:
+        - task_key: Client_Relationship_Data_Document
+          notebook_task:
+            notebook_path: ../src/Client_Relationship_Data_Document.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+      tags:
+        Asset Bundle: ""
+      queue:
+        enabled: true
+
+targets:
+  prod:
+    default: true
+    resources:
+      jobs:
+        Client_Document_API_job:
+          name: Client_Document_API_job
+          schedule:
+            quartz_cron_expression: '0 0 7 * * ?'
+            timezone_id: Europe/Amsterdam
+
+          email_notifications:
+            on_failure:
+              - ruud.van.laar@rabobank.com
+              - fm.global.KYCReportingSupport@rabobank.com
+  preprd:
+    default: true
+    resources:
+      jobs:
+        Client_Document_API_job:
+          name: Client_Document_API_job
+          schedule:
+            quartz_cron_expression: '0 0 8 * * ?'
+            timezone_id: Europe/Amsterdam
+  dev:
+    default: true
+    resources:
+      jobs:
+        Client_Document_API_job:
+          name: Client_Document_API_job
+          schedule:
+            quartz_cron_expression: '0 0 7 * * ?'
+            timezone_id: Europe/Amsterdam

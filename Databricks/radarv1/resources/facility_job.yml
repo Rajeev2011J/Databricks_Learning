@@ -1,0 +1,60 @@
+# The main job for facility
+
+variables:
+  med_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "radar-medium"
+  # trigger_paused_status: 
+  #   description: PAUSED OR UNPAUSED
+  #   default: PAUSED
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+
+resources:
+  jobs:
+    facility_job:
+      name: facility_job
+
+      permissions:
+        - level: CAN_MANAGE
+          user_name: mattia.didone@rabobank.com
+        - level: CAN_MANAGE
+          user_name: casey.wong@rabobank.nl
+        - level: CAN_MANAGE
+          user_name: Lucija.Marjanovic@rabobank.nl
+
+      health:
+        rules:
+          - metric: RUN_DURATION_SECONDS
+            op: GREATER_THAN
+            value: 3000
+
+      schedule:
+        quartz_cron_expression: 0 0 23 ? * * *
+        timezone_id: Europe/Amsterdam
+        pause_status: ${var.BUNDLE_VAR_trigger_pause_status}
+
+      email_notifications:
+        on_failure:
+          - mattia.didone@rabobank.com
+          - fm.nl.utrecht.kycdataadmin@rabobank.com
+        # on_duration_warning_threshold_exceeded:
+        #   - mattia.didone@rabobank.com
+        #   - fm.nl.utrecht.kycdataadmin@rabobank.com
+          
+      tasks:
+        - task_key: facility_limit_breach_createtable__daily
+          notebook_task:
+            notebook_path: ../src/facility_limit_breach_createtable__daily.py
+          existing_cluster_id: ${var.med_cluster_id}
+
+        - task_key: load_facility_to_dataverse
+          notebook_task:
+            notebook_path: ../src/dataverse/load_facility_to_dataverse.py
+          existing_cluster_id: ${var.med_cluster_id}
+          depends_on:
+            - task_key: facility_limit_breach_createtable__daily
+        
+      queue:
+        enabled: true

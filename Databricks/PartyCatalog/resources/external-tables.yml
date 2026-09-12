@@ -1,0 +1,20 @@
+
+resources:
+  tables:
+    raw_events:
+      catalog_name: analytics
+      schema_name: raw
+      name: events
+      table_type: EXTERNAL
+      data_source_format: DELTA
+      storage_location: abfss://analytics@mydatalake.dfs.core.windows.net/raw/events
+      comment: Raw event data
+      columns:
+        - name: event_id
+          type: string
+        - name: event_type
+          type: string
+        - name: event_time
+          type: timestamp
+        - name: payload
+          type: string

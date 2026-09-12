@@ -1,0 +1,51 @@
+# The main job for GCOB_Reportingv1.
+variables:
+  UC_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "Radar-small-UC"
+
+
+# jobs / tasks
+resources:
+  jobs:
+    Run_UC_RDM_notebooks_for_lineage:
+      name: Run UC RDM notebooks for lineage
+
+      permissions:
+        - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+          level: CAN_MANAGE_RUN
+    
+      tasks:
+        - task_key: Party
+          notebook_task:
+            notebook_path: ../src/2026-07-10 RadarDataModel_Version3 Into Unity/UC_RDM_Party.py
+            source: WORKSPACE
+          existing_cluster_id: ${var.UC_cluster_id}
+        - task_key: Party_Address
+          notebook_task:
+            notebook_path: ../src/2026-07-10 RadarDataModel_Version3 Into Unity/UC_RDM_Party_Address.py
+            source: WORKSPACE
+          existing_cluster_id: ${var.UC_cluster_id}
+        - task_key: Party_Clientownership
+          notebook_task:
+            notebook_path: ../src/2026-07-10 RadarDataModel_Version3 Into Unity/UC_RDM_Party_ClientOwnership.py
+            source: WORKSPACE
+          existing_cluster_id: ${var.UC_cluster_id}
+        - task_key: Party_CountryAffiliation
+          notebook_task:
+            notebook_path: ../src/2026-07-10 RadarDataModel_Version3 Into Unity/UC_RDM_Party_CountryAffiliation.py
+            source: WORKSPACE
+          existing_cluster_id: ${var.UC_cluster_id}
+        - task_key: Party_Naics
+          notebook_task:
+            notebook_path: ../src/2026-07-10 RadarDataModel_Version3 Into Unity/UC_RDM_Party_BusinessActivities.py
+            source: WORKSPACE
+          existing_cluster_id: ${var.UC_cluster_id}
+        - task_key: Party_Structure
+          notebook_task:
+            notebook_path: ../src/2026-07-10 RadarDataModel_Version3 Into Unity/UC_RDM_Party_Structure.py
+            source: WORKSPACE
+          existing_cluster_id: ${var.UC_cluster_id}
+      queue:
+        enabled: true

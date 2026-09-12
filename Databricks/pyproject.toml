@@ -1,0 +1,114 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+# =============================================================================
+# pytest — single config covering all six Databricks Asset Bundle test suites
+# =============================================================================
+[tool.pytest.ini_options]
+
+# Central test infrastructure + every bundle's tests/ folder
+testpaths = [
+    "tests",                       # shared conftest, fixtures, utils
+    "AdHocRequests/tests",
+    "clusters/tests",
+    "GCOB_Consumer/tests",
+    "GCOB_Reportingv1/tests",
+    "PartyCatalog/tests",
+    "radarv1/tests",
+]
+
+# Every bundle's src/ is on the Python path so tests can `import GcobUtils`
+# etc. without package-prefix gymnastics.
+# The shared tests/ sub-dirs are also added so helpers are importable.
+pythonpath = [
+    "tests",                           # exposes tests/utils/ and tests/fixtures/
+    "AdHocRequests/src",
+    "clusters/src",
+    "GCOB_Consumer/src",
+    "GCOB_Reportingv1/src",
+    "GCOB_Reportingv1/tests",          # RadarUtils.py lives here (legacy location)
+    "PartyCatalog/src",
+    "radarv1/src",
+]
+
+# Minimum pytest version guard
+minversion = "7.4"
+
+# Short traceback by default; use --tb=long when debugging
+addopts = [
+    "--tb=short",
+    "-v",
+    "--strict-markers",                # fail on unknown markers
+    "--import-mode=importlib",         # avoids sys.path collisions between bundles
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+]
+
+# Registered markers — use -m <marker> to run a subset
+markers = [
+    "unit: Pure Python tests, no Spark, run in < 1 s",
+    "spark: Tests that require a local PySpark session",
+    "integration: Tests that hit live Databricks / Azure (CI only)",
+    "radarv1: Tests for the radarv1 bundle",
+    "gcob_consumer: Tests for the GCOB_Consumer bundle",
+    "gcob_reportingv1: Tests for the GCOB_Reportingv1 bundle",
+    "adhoc: Tests for the AdHocRequests bundle",
+    "clusters: Tests for the clusters bundle",
+    "party_catalog: Tests for the PartyCatalog bundle",
+    "dq: Data-quality validation tests",
+    "slow: Tests that take > 10 s",
+]
+
+# Treat these warnings as errors to keep the suite clean
+filterwarnings = [
+    "error::DeprecationWarning",
+    "ignore::DeprecationWarning:pyspark",
+    "ignore::DeprecationWarning:py4j",
+    "ignore::ResourceWarning",
+]
+
+# Show 10 slowest tests at end of run
+# (requires pytest-durations plugin; silently ignored if not installed)
+# durations = 10
+
+log_cli       = false
+log_level     = "WARNING"
+log_cli_level = "WARNING"
+
+# =============================================================================
+# Coverage — src paths for all bundles
+# =============================================================================
+[tool.coverage.run]
+branch   = true
+parallel = true
+source   = [
+    "AdHocRequests/src",
+    "clusters/src",
+    "GCOB_Consumer/src",
+    "GCOB_Reportingv1/src",
+    "PartyCatalog/src",
+    "radarv1/src",
+]
+omit = [
+    "*/tests/*",
+    "*/__init__.py",
+    "*/main.py",          # template stubs, not real logic
+    "*/scratch/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+show_missing   = true
+skip_empty     = true
+fail_under     = 60          # raise CI failure below 60 % coverage
+exclude_lines  = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+title     = "Databricks Bundles — Coverage Report"

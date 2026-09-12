@@ -1,0 +1,35 @@
+variables:
+  catalog_name:
+    description: "catalog_name"
+    default: "wr_fj_parties_and_risk_assessment_dev"
+    type: string
+
+  radar_schema_grants:
+    description: "radar_schema_grants"
+    default: ""
+    type: string
+
+  catalog_owner:
+    description: catalog_owner
+    default: "reg-dev-global-wrkycif"
+    type: string
+
+  environment:  
+    description: environment
+    default: "dev"
+    type: string
+
+  workspacename: 
+    description: workspacename
+    default: dbws-wr-radar-dev
+    type: string
+
+  workspaceurl: 
+    description: workspaceurl
+    default: adb-3634536606298227.7.azuredatabricks.net/
+    type: string
+  
+
+  
+
+

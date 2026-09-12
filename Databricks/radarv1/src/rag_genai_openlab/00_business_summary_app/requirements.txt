@@ -1,0 +1,9 @@
+gradio==4.43.0
+streamlit
+azure-identity
+azure-ai-documentintelligence
+openai
+python-docx
+Pillow
+mlflow
+requests

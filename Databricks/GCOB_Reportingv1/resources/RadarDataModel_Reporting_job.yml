@@ -1,0 +1,106 @@
+variables:
+  dab_medium_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "DAB-medium"
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+resources:
+  jobs:
+    RDM_Reporting_job:
+      name: RDM_Reporting_job
+
+      schedule:
+        # Run every day at 8:15:44 AM
+        quartz_cron_expression: '44 15 8 * * ?'
+        timezone_id: Europe/Amsterdam
+        pause_status: UNPAUSED
+
+      tasks:
+        - task_key: RDM_Report
+          notebook_task:
+            notebook_path: ../src/RDM_Report.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_N2K_AAD_UserDetails
+          notebook_task:
+            notebook_path: ../src/RDM_N2K_AAD_UserDetails.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDMReporting_Report_Refresh
+          depends_on:
+            - task_key: RDM_Report
+          notebook_task:
+            notebook_path: ../PowerBI_Refresh/RDMReporting_Report_Refresh.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+      tags:
+        Asset Bundle: ""
+      queue:
+        enabled: true
+
+targets:
+  prod:
+    default: true
+    resources:
+      jobs:
+        RDM_Reporting_job:
+          name: RDM_Reporting_job
+
+          permissions:
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerAdmin.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us
+              level: CAN_VIEW
+
+          schedule:
+            quartz_cron_expression: '0 0 8 * * ?' 
+            timezone_id: Europe/Amsterdam
+
+          email_notifications:
+            on_failure:
+              - ruud.van.laar@rabobank.com
+              - fm.global.KYCReportingSupport@rabobank.com
+  preprod:
+    default: true
+    resources:
+      jobs:
+        RDM_Reporting_job:
+          name: RDM_Reporting_job
+
+          permissions:
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerAdmin.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us
+              level: CAN_VIEW
+
+          schedule:
+            quartz_cron_expression: '0 0 9 * * ?'
+            timezone_id: Europe/Amsterdam
+  dev:
+    default: true
+    resources:
+      jobs:
+        RDM_Reporting_job:
+          name: RDM_Reporting_job
+
+          permissions:
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+              level: CAN_MANAGE_RUN
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerAdmin.us
+              level: CAN_MANAGE
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us
+              level: CAN_VIEW
+
+          schedule:
+            quartz_cron_expression: '0 0 8 * * ?'
+            timezone_id: Europe/Amsterdam

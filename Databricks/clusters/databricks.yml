@@ -1,0 +1,95 @@
+# This is a Databricks asset bundle definition for clusters.
+# See https://docs.databricks.com/dev-tools/bundles/index.html for documentation.
+bundle:
+  name: clusters
+
+include:
+  - resources/*.yml
+
+
+sync:
+  include:
+    - /*.sh
+
+
+targets:
+  dev:
+    mode: production
+    default: true
+    workspace:
+      host: https://adb-3634536606298227.7.azuredatabricks.net
+      root_path: /live/${bundle.name}
+    run_as:
+      service_principal_name: c358ffb6-592c-4fbe-9472-d408dc39428e
+    resources:
+      clusters:
+        dab_small_cluster:
+          permissions:
+            - group_name: "users"
+              level: "CAN_RESTART"
+        dab_medium_cluster:
+          permissions:
+            - group_name: "users"
+              level: "CAN_RESTART"
+        dab_large_cluster:
+          permissions:
+            - group_name: "users"
+              level: "CAN_RESTART"
+        Radar_small_cluster:
+          permissions:
+            - group_name: "users"
+              level: "CAN_RESTART"
+        Radar_medium_cluster:
+          permissions:
+            - group_name: "users"
+              level: "CAN_RESTART"
+        Radar_large_cluster:
+          permissions:
+            - group_name: "users"
+              level: "CAN_RESTART"
+          
+
+  preprod:
+    mode: production
+    workspace:
+      host: https://adb-2475554465308574.14.azuredatabricks.net
+      root_path: /live/${bundle.name}
+    run_as:
+      service_principal_name: caec575d-cdd0-4e29-8f1d-4eb8759b12b3
+
+
+    resources:
+      clusters:
+        dab_small_cluster:
+          permissions:
+            - group_name: "users"
+              level: "CAN_RESTART"
+        dab_medium_cluster:
+          permissions:
+            - group_name: "users"
+              level: "CAN_RESTART"
+        dab_large_cluster:
+          permissions:
+            - group_name: "users"
+              level: "CAN_RESTART"
+        Radar_small_cluster:
+          permissions:
+            - group_name: "users"
+              level: "CAN_RESTART"
+        Radar_medium_cluster:
+          permissions:
+            - group_name: "users"
+              level: "CAN_RESTART"
+        Radar_large_cluster:
+          permissions:
+            - group_name: "users"
+              level: "CAN_RESTART"
+
+
+  prod:
+    mode: production
+    workspace:
+      host: https://adb-2426369368647006.6.azuredatabricks.net/
+      root_path: /live/${bundle.name}
+    run_as:
+      service_principal_name: caec575d-cdd0-4e29-8f1d-4eb8759b12b3

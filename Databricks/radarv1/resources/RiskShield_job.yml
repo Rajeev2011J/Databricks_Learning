@@ -1,0 +1,184 @@
+variables:
+  dab_medium_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "DAB-medium"
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+resources:
+  jobs:
+    RiskShield_T24_RD_job:
+      name: RiskShield_T24_RD_job
+      tasks:
+        - task_key: Riskshield_T24_RD_CUSTOMERS
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_T24_RD_CUSTOMERS.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+    RiskShield_job:
+      name: RiskShield_job
+
+      # schedule:
+      #   # Run every day at 6:30:44 AM
+      #   quartz_cron_expression: '00 30 14 * * ?'
+      #   timezone_id: Europe/Amsterdam
+      #   pause_status: UNPAUSED
+
+      tasks:
+        - task_key: RiskShield_APS_FRF_ACC
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_APS_FRF_ACC.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RiskShield_APS_LND_ACC
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_APS_LND_ACC.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+        
+        - task_key: RiskShield_APS_LND_TRAF
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_APS_LND_TRAF.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: Riskshield_FLEXCUBE_EUR_NR_ACCOUNT_TRAFFIC
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_FLEXCUBE_EUR_NR_ACCOUNT_TRAFFIC.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: Riskshield_FLEXCUBE_EUR_NR_ACCOUNTS
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_FLEXCUBE_EUR_NR_ACCOUNTS.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: Riskshield_FLEXCUBE_EUR_NR_TRADE
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_FLEXCUBE_EUR_NR_TRADE.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: Riskshield_ODS_RBB_ACCOUNT_TRAFFIC
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_ODS_RBB_ACCOUNT_TRAFFIC.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: Riskshield_ODS_RBB_ACCOUNTS
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_ODS_RBB_ACCOUNTS.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: Riskshield_ODS_RBB_CUSTOMER_PRODUCTS
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_ODS_RBB_CUSTOMER_PRODUCTS.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: Riskshield_ODS_RBB_CUSTOMERS
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_ODS_RBB_CUSTOMERS.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RiskShield_Palermo_NYW_ACCOUNT_TRAFFIC
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_Palermo_NYW_ACCOUNT_TRAFFIC.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+        
+        - task_key: RiskShield_Palermo_NYW_ACCOUNTS
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_Palermo_NYW_ACCOUNTS.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RiskShield_Palermo_NYW_CUSTOMERS
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_Palermo_NYW_CUSTOMERS.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: Riskshield_T24_ACCOUNT_TRAFFIC
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_T24_ACCOUNT_TRAFFIC.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: Riskshield_T24_ACCOUNTS
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_T24_ACCOUNTS.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: Riskshield_T24_CB_CUSTOMERS
+          notebook_task:
+            notebook_path: ../RiskShieldData/RiskShield_T24_CB_CUSTOMERS.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: EBX
+          notebook_task:
+            notebook_path: ../RiskShieldData/EBX.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: SIEBEL
+          notebook_task:
+            notebook_path: ../RiskShieldData/SIEBEL.py
+          existing_cluster_id: ${var.med_cluster_id}
+
+        - task_key: KN1_CONTRAPARTES
+          notebook_task:
+            notebook_path: ../RiskShieldData/KN1_CONTRAPARTES.py
+          existing_cluster_id: ${var.med_cluster_id}
+
+      tags:
+        Asset Bundle: ""
+      queue:
+        enabled: true
+
+targets:
+  prod:
+    default: true
+    resources:
+      jobs:
+        RiskShield_job:
+          name: RiskShield_job
+          schedule:
+            quartz_cron_expression: '0 30 14 * * ?'  # 09:00 AM
+            timezone_id: Europe/Amsterdam
+            pause_status: UNPAUSED
+
+        RiskShield_T24_RD_job:
+          name: RiskShield_T24_RD_job
+          schedule:
+            quartz_cron_expression: '0 30 14 ? * TUE,WED,THU,FRI,SAT'  # 09:00 AM
+            timezone_id: Europe/Amsterdam
+            pause_status: UNPAUSED
+
+          email_notifications:
+            on_failure:
+              - ruud.van.laar@rabobank.com
+              - fm.global.KYCReportingSupport@rabobank.com
+  preprd:
+    default: true
+    resources:
+      jobs:
+        RiskShield_job:
+          name: RiskShield_job
+          schedule:
+            quartz_cron_expression: '0 0 15 * * ?'
+            timezone_id: Europe/Amsterdam
+            pause_status: PAUSED
+
+        RiskShield_T24_RD_job:
+          name: RiskShield_T24_RD_job
+          schedule:
+            quartz_cron_expression: '0 30 14 ? * TUE,WED,THU,FRI,SAT'  # 09:00 AM
+            timezone_id: Europe/Amsterdam
+            pause_status: PAUSED
+  dev:
+    default: true
+    resources:
+      jobs:
+        RiskShield_job:
+          name: RiskShield_job
+          schedule:
+            quartz_cron_expression: '0 30 14 * * ?'
+            timezone_id: Europe/Amsterdam
+            pause_status: PAUSED
+
+        RiskShield_T24_RD_job:
+          name: RiskShield_T24_RD_job
+          schedule:
+            quartz_cron_expression: '0 30 14 ? * TUE,WED,THU,FRI,SAT'  # 09:00 AM
+            timezone_id: Europe/Amsterdam
+            pause_status: PAUSED

@@ -1,0 +1,16 @@
+
+resources:
+  schemas:
+    gcobreporting:
+      catalog_name: ${var.catalog_name}
+      name: "gcobreportingv103"
+      comment: "gcob reporting based on v103"
+
+    RDMv3:
+      catalog_name: ${var.catalog_name}
+      name: "RDMv3"
+      comment: "Radar Data model v3"
+
+
+
+    

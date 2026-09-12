@@ -1,0 +1,310 @@
+# The job for RadarDataModel dataobjects
+variables:
+  dab_medium_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "DAB-medium"
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+resources:
+  jobs:
+    radardatamodel_job:
+      name: radardatamodel_job
+
+      permissions:
+        - level: CAN_MANAGE
+          user_name: mattia.didone@rabobank.com
+        - level: CAN_MANAGE
+          user_name: lucija.marjanovic@rabobank.nl
+        - level: CAN_MANAGE
+          user_name: casey.wong@rabobank.nl
+          
+      schedule:
+        quartz_cron_expression:  0 45 6 * * ?
+        timezone_id: Europe/Amsterdam
+        pause_status: UNPAUSED
+
+      tasks:
+        - task_key: RDM_Party
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+            - task_key: RDM_Party_KN1Cases
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_role
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+            - task_key: RDM_Party_V2
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_role.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_V2
+          depends_on:
+            - task_key: RDM_Party
+          notebook_task:
+            notebook_path: ../RadarDataModel/RadarDataModel_Version2/RDM_Party.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_Address
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_Address.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+        
+        - task_key: RDM_Party_Address_V2
+          depends_on:
+            - task_key: RDM_Party_Address
+          notebook_task:
+            notebook_path: ../RadarDataModel/RadarDataModel_Version2/RDM_Party_Address.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_role
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+            - task_key: RDM_Party_V2
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_role.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_Structure
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_Structure.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_Structure_V2
+          depends_on:
+            - task_key: RDM_Party_Structure
+          notebook_task:
+            notebook_path: ../RadarDataModel/RadarDataModel_Version2/RDM_Party_Structure.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_SystemIdentifier
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_SystemIdentifier.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Internal_SystemComparison
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Internal_SystemComparison.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_CDDCase_GRAM
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+            - task_key: RDM_Party_KN1Cases
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_CDDCase_GRAM.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+        
+        - task_key: RDM_CDDCase_GRAM_V2
+          depends_on:
+            - task_key: RDM_CDDCase_GRAM
+          notebook_task:
+            notebook_path: ../RadarDataModel/RadarDataModel_Version2/RDM_CDDCase_GRAM.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_BusinessActivities
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_BusinessActivities.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_BusinessActivities_V2
+          depends_on:
+            - task_key: RDM_Party_BusinessActivities
+          notebook_task:
+            notebook_path: ../RadarDataModel/RadarDataModel_Version2/RDM_Party_BusinessActivities.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_CDDCase_QuestionAnswer_GRAM
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+            - task_key: RDM_Party_KN1Cases
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_CDDCase_QuestionAnswer_GRAM.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_CDDCase_QuestionAnswer_GRAM_V2
+          depends_on:
+            - task_key: RDM_CDDCase_QuestionAnswer_GRAM
+          notebook_task:
+            notebook_path: ../RadarDataModel/RadarDataModel_Version2/RDM_CDDCase_QuestionAnswer_GRAM.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_CDDCase_RANZ
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_CDDCase_RANZ.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_CDDCase_QuestionAnswer_RANZ
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_CDDCase_QuestionAnswer_RANZ.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_CDDCase_RiskCategories
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+            - task_key: RDM_Party_KN1Cases
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_CDDCase_RiskCategories.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_CDDCase_RiskCategories_V2
+          depends_on:
+            - task_key: RDM_Party_CDDCase_RiskCategories
+          notebook_task:
+            notebook_path: ../RadarDataModel/RadarDataModel_Version2/RDM_Party_CDDCase_RiskCategories.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_CDDCase_RiskCategories_RANZ
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_CDDCase_RiskCategories_RANZ.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_RANZ
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_RANZ.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RANZ_RDM_Party_BusinessActivities
+          depends_on:
+            - task_key: RDM_CDDCase_QuestionAnswer_RANZ
+          notebook_task:
+            notebook_path: ../RadarDataModel/RANZ_RDM_Party_BusinessActivities.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_Coverage
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_Coverage.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Data_Quality_Check
+          depends_on:
+            - task_key: RDM_Party
+            - task_key: RDM_Party_Address
+            - task_key: RDM_CDDCase_GRAM
+            - task_key: RDM_CDDCase_QuestionAnswer_GRAM
+            - task_key: RDM_Party_BusinessActivities
+            - task_key: RDM_Party_SystemIdentifier
+            - task_key: RDM_Party_CDDCase_RiskCategories
+            - task_key: RDM_Party_Structure
+            - task_key: RDM_Party_Coverage
+            - task_key: RDM_Party_Selection
+            - task_key: RDM_Party_CountryAffiliation
+            - task_key: RDM_Party_Documents
+            - task_key: RDM_Party_ClientOwnership
+          notebook_task:
+            notebook_path: ../RadarDataModel/tests/RDM_Data_Quality_Check.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_CountryAffiliation
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_CountryAffiliation.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_Identification
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_Identification.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_Documents
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_Documents.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_Selection
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_Selection.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+        
+        - task_key: RDM_Party_KN1Cases
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_KN1Cases.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_AlternativeNames
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_AlternativeNames.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_RadarKeyStore
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_RadarKeyStore.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RDM_Party_ClientOwnership
+          depends_on:
+            - task_key: RDM_Party_SystemIdentifier
+          notebook_task:
+            notebook_path: ../RadarDataModel/RDM_Party_ClientOwnership.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: RANZ_Report_Refresh
+          depends_on:
+            - task_key: RDM_CDDCase_RANZ
+            - task_key: RDM_Party_CDDCase_RiskCategories_RANZ
+            - task_key: RDM_Party_RANZ
+            - task_key: RANZ_RDM_Party_BusinessActivities
+          notebook_task:
+            notebook_path: ../PowerBI_Refresh/RANZ_Report_Refresh.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+      tags:
+        Asset Bundle: ""
+      queue:
+        enabled: true
+
+targets:
+  prod:
+    default: true
+    resources:
+      jobs:
+        radardatamodel_job:
+          name: radardatamodel_job
+          schedule:
+            quartz_cron_expression: '0 45 6 * * ?'
+            timezone_id: Europe/Amsterdam
+
+          email_notifications:
+            on_failure:
+              - ruud.van.laar@rabobank.com
+              - fm.global.KYCReportingSupport@rabobank.com
+  preprd:
+    default: true
+    resources:
+      jobs:
+        radardatamodel_job:
+          name: radardatamodel_job
+          schedule:
+            quartz_cron_expression: '0 45 7 * * ?'
+            timezone_id: Europe/Amsterdam
+  dev:
+    default: true
+    resources:
+      jobs:
+        radardatamodel_job:
+      jobs:
+        radardatamodel_job:
+          name: radardatamodel_job
+          schedule:
+            quartz_cron_expression: '0 45 6 * * ?'
+            timezone_id: Europe/Amsterdam

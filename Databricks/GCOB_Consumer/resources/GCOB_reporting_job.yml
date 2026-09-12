@@ -1,0 +1,170 @@
+variables:     
+  Radar_medium_UC_cluster_id:
+    description: Cluster ID for Radar_medium_UC_cluster_id cluster 
+    lookup:
+      cluster: "Radar-medium-UC"   
+  wheel_path:
+    description: Environment specific wheel path
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+resources:
+  jobs:
+    GCOB_Reporting_job:
+      name: GCOB_Reporting_job
+
+      # schedule:
+      #   # Run every day at 6:30:00 AM
+      #   quartz_cron_expression: '00 30 6 * * ?'
+      #   timezone_id: Europe/Amsterdam
+      #   pause_status: PAUSED
+
+      tasks:
+        - task_key: GCOB_GlobalViews
+          notebook_task:
+            notebook_path: ../src/GCOB_GlobalViews.py
+          existing_cluster_id: ${var.Radar_medium_UC_cluster_id}
+          libraries:
+            - whl: ${var.wheel_path[0]}
+            - whl: ${var.wheel_path[1]}
+            - whl: ${var.wheel_path[2]}
+            - whl: ${var.wheel_path[3]}
+            - whl: ${var.wheel_path[4]}
+            - whl: ${var.wheel_path[5]}
+
+        - task_key: GCOB_Party
+          depends_on:
+            - task_key: GCOB_GlobalViews
+          notebook_task:
+            notebook_path: ../src/GCOB_Party.py
+          existing_cluster_id: ${var.Radar_medium_UC_cluster_id}
+          libraries:
+            - whl: ${var.wheel_path[0]}
+            - whl: ${var.wheel_path[1]}
+            - whl: ${var.wheel_path[2]}
+            - whl: ${var.wheel_path[3]}
+            - whl: ${var.wheel_path[4]}
+            - whl: ${var.wheel_path[5]}
+
+        - task_key: GCOB_PartyCase
+          depends_on:
+            - task_key: GCOB_GlobalViews
+          notebook_task:
+            notebook_path: ../src/GCOB_PartyCase.py
+          existing_cluster_id: ${var.Radar_medium_UC_cluster_id}
+          libraries:
+            - whl: ${var.wheel_path[0]}
+            - whl: ${var.wheel_path[1]}
+            - whl: ${var.wheel_path[2]}
+            - whl: ${var.wheel_path[3]}
+            - whl: ${var.wheel_path[4]}
+            - whl: ${var.wheel_path[5]}
+        
+        - task_key: GCOB_PartyCaseRiskCategories
+          depends_on:
+            - task_key: GCOB_GlobalViews
+          notebook_task:
+            notebook_path: ../src/GCOB_PartyCaseRiskCategories.py
+          existing_cluster_id: ${var.Radar_medium_UC_cluster_id}
+          libraries:
+            - whl: ${var.wheel_path[0]}
+            - whl: ${var.wheel_path[1]}
+            - whl: ${var.wheel_path[2]}
+            - whl: ${var.wheel_path[3]}
+            - whl: ${var.wheel_path[4]}
+            - whl: ${var.wheel_path[5]} 
+        
+        - task_key: GCOB_PartyCaseOwnership
+          depends_on:
+            - task_key: GCOB_GlobalViews
+          notebook_task:
+            notebook_path: ../src/GCOB_PartyCaseOwnership.py
+          existing_cluster_id: ${var.Radar_medium_UC_cluster_id}
+          libraries:
+            - whl: ${var.wheel_path[0]}
+            - whl: ${var.wheel_path[1]}
+            - whl: ${var.wheel_path[2]}
+            - whl: ${var.wheel_path[3]}
+            - whl: ${var.wheel_path[4]}
+            - whl: ${var.wheel_path[5]}  
+
+        - task_key: N2K_GCOB_AAD_UserDetails
+          depends_on:
+            - task_key: GCOB_GlobalViews
+          notebook_task:
+            notebook_path: ../src/N2K_GCOB_AAD_UserDetails.py
+          existing_cluster_id: ${var.Radar_medium_UC_cluster_id}
+
+      tags:
+        Asset Bundle: ""
+      queue:
+        enabled: true
+
+targets:
+  prod:
+    default: true
+    resources:
+      jobs:
+        GCOB_Reporting_job:
+          name: GCOB_Reporting_job
+
+          permissions:
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerAdmin.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us
+              level: CAN_VIEW          
+
+          schedule:
+            quartz_cron_expression: '0 30 6 * * ?'  # 09:00 AM
+            timezone_id: Europe/Amsterdam
+            pause_status: PAUSED
+
+          email_notifications:
+            on_failure:
+              - ruud.van.laar@rabobank.com
+              - fm.global.KYCReportingSupport@rabobank.com
+  preprod:
+    default: true
+    resources:
+      jobs:
+        GCOB_Reporting_job:
+          name: GCOB_Reporting_job
+
+          permissions:
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerAdmin.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us
+              level: CAN_VIEW
+
+          schedule:
+            quartz_cron_expression: '0 30 7 * * ?'  # 09:00 AM
+            timezone_id: Europe/Amsterdam
+            pause_status: PAUSED
+  dev:
+    default: true
+    resources:
+      jobs:
+        GCOB_Reporting_job:
+          name: GCOB_Reporting_job
+
+          permissions:
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+              level: CAN_MANAGE_RUN
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerAdmin.us
+              level: CAN_MANAGE
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us
+              level: CAN_VIEW
+            
+          schedule:
+            quartz_cron_expression: '0 30 6 * * ?'  # 09:00 AM
+            timezone_id: Europe/Amsterdam
+            pause_status: PAUSED

@@ -1,0 +1,38 @@
+# The main job for GCOB_Reportingv1.
+variables:
+  med_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "radar-medium"
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+# The main job for AdHocRequests.
+resources:
+  jobs:
+    AdHocRequests_job:
+      name: AdHocRequests_job
+
+      schedule:
+        # Run every day at 8:37 AM
+        quartz_cron_expression: '44 37 8 * * ?'
+        timezone_id: Europe/Amsterdam
+        pause_status: PAUSED
+
+      email_notifications:
+        on_failure:
+          - ruud.van.laar@rabobank.com
+
+      # tasks:
+      #   - task_key: notebook_task
+      #     job_cluster_key: job_cluster
+      #     notebook_task:
+      #       notebook_path: ../src/notebook.ipynb
+        
+      # job_clusters:
+      #   - job_cluster_key: job_cluster
+      #     new_cluster:
+      #       spark_version: 13.3.x-scala2.12
+      #       node_type_id: Standard_D3_v2
+      #       autoscale:
+      #           min_workers: 1
+      #           max_workers: 4

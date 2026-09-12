@@ -1,0 +1,51 @@
+# The main job for facility
+
+variables:
+  med_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "radar-medium"
+  # trigger_paused_status: 
+  #   description: PAUSED OR UNPAUSED
+  #   default: PAUSED
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+
+resources:
+  jobs:
+    icm_job:
+      name: icm_job
+
+      permissions:
+        - level: CAN_MANAGE
+          user_name: mattia.didone@rabobank.com
+        - level: CAN_MANAGE
+          user_name: casey.wong@rabobank.nl
+        - level: CAN_MANAGE
+          user_name: Lucija.Marjanovic@rabobank.nl
+          
+      health:
+        rules:
+          - metric: RUN_DURATION_SECONDS
+            op: GREATER_THAN
+            value: 3000
+
+      schedule:
+          quartz_cron_expression: 0 0 9 1 1,4,7,10 ?
+          timezone_id: Europe/Amsterdam
+          pause_status: ${var.BUNDLE_VAR_trigger_pause_status}
+
+
+      email_notifications:
+        on_failure:
+          - shivam.rastogi@rabobank.com
+          - fm.nl.utrecht.kycdataadmin@rabobank.com
+          
+      tasks:
+        - task_key: icm_quaterly
+          notebook_task:
+            notebook_path: ../src/icm_quaterly.py
+          existing_cluster_id: ${var.med_cluster_id}
+          
+      queue:
+        enabled: true

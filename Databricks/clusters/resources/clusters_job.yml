@@ -1,0 +1,467 @@
+# -------------------------------------------------------------------
+# Define variabless
+# -------------------------------------------------------------------
+
+variables:
+  uc_policy:
+    lookup:
+      cluster_policy: "Shared Compute"
+
+  # Declare the variable so targets can override it
+  radar_catalog_name:
+    description: "Resolved wr_fj_parties_and_risk_assessment per environment"
+
+
+# -------------------------------------------------------------------
+# Define clusters
+# -------------------------------------------------------------------
+
+resources:
+  clusters:
+    # -------------------------
+    # Legacy (non-UC) clusters
+    # -------------------------
+
+    dab_small_cluster:
+      num_workers: 0
+      cluster_name: DAB-small
+      spark_version: 14.3.x-scala2.12
+      spark_conf:
+        spark.master: local[*, 4]
+        spark.databricks.cluster.profile: singleNode
+      init_scripts:
+        - workspace:
+            destination: /live/clusters/files/clusters_library.sh
+      azure_attributes:
+        first_on_demand: 1
+        availability: ON_DEMAND_AZURE
+        spot_bid_max_price: -1
+      node_type_id: Standard_D8ads_v5
+      driver_node_type_id: Standard_D8ads_v5
+      ssh_public_keys: []
+      custom_tags:
+        ResourceClass: SingleNode
+      spark_env_vars:
+        PYSPARK_PYTHON: ((PYSPARK_PYTHON_VALUE))
+        APP_REG_APP_ID: ((APP_REG_APP_ID_VALUE))
+        GDP_STORAGE_NAME: ((GDP_STORAGE_NAME_VALUE))
+        TENANT_ID: ((TENANT_ID_VALUE))
+        ENV: ((ENV_VALUE))
+        DATAVERSE_URL: ((DATAVERSE_URL_VALUE))
+        subscriptionId: ((subscriptionId_VALUE))
+        resourceGroup_API: ((resourceGroup_API_VALUE))
+        CosmosAccount: ((CosmosAccount_VALUE))
+        GNS_STORAGE_ACCOUNT: ((GNS_STORAGE_ACCOUNT_VALUE))
+        GNS_CONTAINER: ((GNS_CONTAINER_VALUE))
+        GDP_SA_STORAGE_NAME: ((GDP_SA_STORAGE_NAME_VALUE))
+        GDP_NA_STORAGE_NAME: ((GDP_NA_STORAGE_NAME_VALUE))
+        SALZReadStorage: ((SALZReadStorage_VALUE))
+        job_list: ((job_list_Value))
+        AU_GDP_Defined_Storage_Account: ((AU_GDP_Defined_Storage_Account_VALUE))
+        NEXUSCLOUD_USERNAME: ((NEXUSCLOUD_USERNAME_VALUE))
+        NEXUSCLOUD_PASSWORD: ((NEXUSCLOUD_PASSWORD_VALUE))
+        CATALOG: ((CATALOG_VALUE))
+        GCOB_UC_SCHEMA: ((GCOB_UC_SCHEMA_VALUE))
+      autotermination_minutes: 40
+      enable_elastic_disk: true
+      data_security_mode: NONE
+      runtime_engine: PHOTON
+
+    dab_medium_cluster:
+      autoscale:
+        min_workers: 2
+        max_workers: 4
+      cluster_name: DAB-medium
+      spark_version: 14.3.x-scala2.12
+      spark_conf: {}
+      azure_attributes:
+        first_on_demand: 1
+        availability: ON_DEMAND_AZURE
+        spot_bid_max_price: -1
+      node_type_id: Standard_D16ads_v5
+      ssh_public_keys: []
+      custom_tags: {}
+      init_scripts:
+        - workspace:
+            destination: /live/clusters/files/clusters_library.sh
+      spark_env_vars:
+        PYSPARK_PYTHON: ((PYSPARK_PYTHON_VALUE))
+        APP_REG_APP_ID: ((APP_REG_APP_ID_VALUE))
+        GDP_STORAGE_NAME: ((GDP_STORAGE_NAME_VALUE))
+        TENANT_ID: ((TENANT_ID_VALUE))
+        ENV: ((ENV_VALUE))
+        DATAVERSE_URL: ((DATAVERSE_URL_VALUE))
+        subscriptionId: ((subscriptionId_VALUE))
+        resourceGroup_API: ((resourceGroup_API_VALUE))
+        CosmosAccount: ((CosmosAccount_VALUE))
+        GNS_CONTAINER: ((GNS_CONTAINER_VALUE))
+        GNS_STORAGE_ACCOUNT: ((GNS_STORAGE_ACCOUNT_VALUE))
+        GDP_SA_STORAGE_NAME: ((GDP_SA_STORAGE_NAME_VALUE))
+        GDP_NA_STORAGE_NAME: ((GDP_NA_STORAGE_NAME_VALUE))
+        SALZReadStorage: ((SALZReadStorage_VALUE))
+        job_list: ((job_list_Value))
+        AU_GDP_Defined_Storage_Account: ((AU_GDP_Defined_Storage_Account_VALUE))
+        NEXUSCLOUD_USERNAME: ((NEXUSCLOUD_USERNAME_VALUE))
+        NEXUSCLOUD_PASSWORD: ((NEXUSCLOUD_PASSWORD_VALUE))
+        CATALOG: ((CATALOG_VALUE))
+        GCOB_UC_SCHEMA: ((GCOB_UC_SCHEMA_VALUE))
+      autotermination_minutes: 20
+      data_security_mode: NONE
+      runtime_engine: PHOTON
+
+    dab_large_cluster:
+      autoscale:
+        min_workers: 2
+        max_workers: 4
+      cluster_name: DAB-large
+      spark_version: 14.3.x-scala2.12
+      spark_conf: {}
+      azure_attributes:
+        first_on_demand: 1
+        availability: ON_DEMAND_AZURE
+        spot_bid_max_price: -1
+      node_type_id: Standard_D32ads_v5
+      ssh_public_keys: []
+      custom_tags: {}
+      init_scripts:
+        - workspace:
+            destination: /live/clusters/files/clusters_library.sh
+      spark_env_vars:
+        PYSPARK_PYTHON: ((PYSPARK_PYTHON_VALUE))
+        APP_REG_APP_ID: ((APP_REG_APP_ID_VALUE))
+        GDP_STORAGE_NAME: ((GDP_STORAGE_NAME_VALUE))
+        TENANT_ID: ((TENANT_ID_VALUE))
+        ENV: ((ENV_VALUE))
+        DATAVERSE_URL: ((DATAVERSE_URL_VALUE))
+        subscriptionId: ((subscriptionId_VALUE))
+        resourceGroup_API: ((resourceGroup_API_VALUE))
+        CosmosAccount: ((CosmosAccount_VALUE))
+        GNS_STORAGE_ACCOUNT: ((GNS_STORAGE_ACCOUNT_VALUE))
+        GNS_CONTAINER: ((GNS_CONTAINER_VALUE))
+        GDP_SA_STORAGE_NAME: ((GDP_SA_STORAGE_NAME_VALUE))
+        GDP_NA_STORAGE_NAME: ((GDP_NA_STORAGE_NAME_VALUE))
+        SALZReadStorage: ((SALZReadStorage_VALUE))
+        job_list: ((job_list_Value))
+        AU_GDP_Defined_Storage_Account: ((AU_GDP_Defined_Storage_Account_VALUE))
+        NEXUSCLOUD_USERNAME: ((NEXUSCLOUD_USERNAME_VALUE))
+        NEXUSCLOUD_PASSWORD: ((NEXUSCLOUD_PASSWORD_VALUE))
+        CATALOG: ((CATALOG_VALUE))
+        GCOB_UC_SCHEMA: ((GCOB_UC_SCHEMA_VALUE))
+      autotermination_minutes: 20
+      data_security_mode: NONE
+      runtime_engine: PHOTON
+
+    # -------------------------
+    # Unity Catalog clusters
+    # -------------------------
+
+    Radar_small_cluster:
+      autoscale:
+        min_workers: 2
+        max_workers: 2
+      cluster_name: Radar-small-UC
+      spark_version: 17.3.x-scala2.13
+      policy_id: ${var.uc_policy}
+      apply_policy_default_values: false
+      # spark_conf:
+      #   spark.master: local[*, 4]
+      #   spark.databricks.cluster.profile: singleNode
+      azure_attributes:
+        first_on_demand: 1
+        availability: ON_DEMAND_AZURE
+        spot_bid_max_price: -1
+      node_type_id: Standard_D4ads_v5
+      driver_node_type_id: Standard_D4ads_v5
+      ssh_public_keys: []
+      # custom_tags:
+      #   ResourceClass: SingleNode
+      spark_env_vars:        
+        PYSPARK_PYTHON: ((PYSPARK_PYTHON_VALUE))
+        APP_REG_APP_ID: ((APP_REG_APP_ID_VALUE))
+        GDP_STORAGE_NAME: ((GDP_STORAGE_NAME_VALUE))
+        TENANT_ID: ((TENANT_ID_VALUE))
+        ENV: ((ENV_VALUE))
+        DATAVERSE_URL: ((DATAVERSE_URL_VALUE))
+        subscriptionId: ((subscriptionId_VALUE))
+        resourceGroup_API: ((resourceGroup_API_VALUE))
+        CosmosAccount: ((CosmosAccount_VALUE))
+        GNS_STORAGE_ACCOUNT: ((GNS_STORAGE_ACCOUNT_VALUE))
+        GNS_CONTAINER: ((GNS_CONTAINER_VALUE))
+        GDP_SA_STORAGE_NAME: ((GDP_SA_STORAGE_NAME_VALUE))
+        GDP_NA_STORAGE_NAME: ((GDP_NA_STORAGE_NAME_VALUE))
+        SALZReadStorage: ((SALZReadStorage_VALUE))
+        job_list: ((job_list_Value))
+        AU_GDP_Defined_Storage_Account: ((AU_GDP_Defined_Storage_Account_VALUE))
+        CATALOG: ((CATALOG_VALUE))
+        GCOB_UC_SCHEMA: ((GCOB_UC_SCHEMA_VALUE))
+        Radar_Catalog_Name: ${var.radar_catalog_name}
+      autotermination_minutes: 20
+      enable_elastic_disk: true
+      data_security_mode: USER_ISOLATION
+      runtime_engine: PHOTON
+      # permissions:
+      #   - group_name: "users"
+      #     level: "CAN_RESTART"
+
+    Radar_medium_cluster:
+      autoscale:
+        min_workers: 2
+        max_workers: 4
+      cluster_name: Radar-medium-UC
+      spark_version: 17.3.x-scala2.13
+      policy_id: ${var.uc_policy}
+      #spark_conf: {}
+      apply_policy_default_values: false
+      azure_attributes:
+        first_on_demand: 1
+        availability: ON_DEMAND_AZURE
+        spot_bid_max_price: -1
+      node_type_id: Standard_D4ads_v5
+      driver_node_type_id: Standard_D8ads_v5
+      ssh_public_keys: []
+      custom_tags: {}
+      spark_env_vars:
+        PYSPARK_PYTHON: ((PYSPARK_PYTHON_VALUE))
+        APP_REG_APP_ID: ((APP_REG_APP_ID_VALUE))
+        GDP_STORAGE_NAME: ((GDP_STORAGE_NAME_VALUE))
+        TENANT_ID: ((TENANT_ID_VALUE))
+        ENV: ((ENV_VALUE))
+        DATAVERSE_URL: ((DATAVERSE_URL_VALUE))
+        subscriptionId: ((subscriptionId_VALUE))
+        resourceGroup_API: ((resourceGroup_API_VALUE))
+        CosmosAccount: ((CosmosAccount_VALUE))
+        GNS_CONTAINER: ((GNS_CONTAINER_VALUE))
+        GNS_STORAGE_ACCOUNT: ((GNS_STORAGE_ACCOUNT_VALUE))
+        GDP_SA_STORAGE_NAME: ((GDP_SA_STORAGE_NAME_VALUE))
+        GDP_NA_STORAGE_NAME: ((GDP_NA_STORAGE_NAME_VALUE))
+        SALZReadStorage: ((SALZReadStorage_VALUE))
+        job_list: ((job_list_Value))
+        AU_GDP_Defined_Storage_Account: ((AU_GDP_Defined_Storage_Account_VALUE))
+        CATALOG: ((CATALOG_VALUE))
+        GCOB_UC_SCHEMA: ((GCOB_UC_SCHEMA_VALUE))
+        Radar_Catalog_Name: ${var.radar_catalog_name}
+      autotermination_minutes: 20
+      enable_elastic_disk: true
+      init_scripts: []
+      data_security_mode: USER_ISOLATION
+      runtime_engine: PHOTON
+      # permissions:
+      #   - group_name: "users"
+      #     level: "CAN_RESTART"
+
+    Radar_large_cluster:
+      autoscale:
+        min_workers: 2
+        max_workers: 8
+      cluster_name: Radar-large-UC
+      spark_version: 17.3.x-scala2.13
+      policy_id: ${var.uc_policy}
+      #spark_conf: {}
+      apply_policy_default_values: false
+      azure_attributes:
+        first_on_demand: 1
+        availability: ON_DEMAND_AZURE
+        spot_bid_max_price: -1
+      node_type_id: Standard_D4ads_v5
+      driver_node_type_id: Standard_D8ads_v5
+      ssh_public_keys: []
+      custom_tags: {}
+      spark_env_vars:
+        PYSPARK_PYTHON: ((PYSPARK_PYTHON_VALUE))
+        APP_REG_APP_ID: ((APP_REG_APP_ID_VALUE))
+        GDP_STORAGE_NAME: ((GDP_STORAGE_NAME_VALUE))
+        TENANT_ID: ((TENANT_ID_VALUE))
+        ENV: ((ENV_VALUE))
+        DATAVERSE_URL: ((DATAVERSE_URL_VALUE))
+        subscriptionId: ((subscriptionId_VALUE))
+        resourceGroup_API: ((resourceGroup_API_VALUE))
+        CosmosAccount: ((CosmosAccount_VALUE))
+        GNS_STORAGE_ACCOUNT: ((GNS_STORAGE_ACCOUNT_VALUE))
+        GNS_CONTAINER: ((GNS_CONTAINER_VALUE))
+        GDP_SA_STORAGE_NAME: ((GDP_SA_STORAGE_NAME_VALUE))
+        GDP_NA_STORAGE_NAME: ((GDP_NA_STORAGE_NAME_VALUE))
+        SALZReadStorage: ((SALZReadStorage_VALUE))
+        job_list: ((job_list_Value))
+        AU_GDP_Defined_Storage_Account: ((AU_GDP_Defined_Storage_Account_VALUE))
+        CATALOG: ((CATALOG_VALUE))
+        GCOB_UC_SCHEMA: ((GCOB_UC_SCHEMA_VALUE))
+        Radar_Catalog_Name: ${var.radar_catalog_name}
+      autotermination_minutes: 20
+      enable_elastic_disk: true
+      init_scripts: []
+      data_security_mode: USER_ISOLATION
+      runtime_engine: PHOTON
+      # permissions:
+      #   - group_name: "users"
+      #     level: "CAN_RESTART"
+
+
+targets:
+
+  dev:
+    variables:
+      radar_catalog_name: wr_fj_parties_and_risk_assessment_dev
+
+    resources:
+      clusters:
+
+        dab_small_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us"
+              level: "CAN_RESTART"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us"
+              level: "CAN_ATTACH_TO"
+
+        dab_medium_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us"
+              level: "CAN_RESTART"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us"
+              level: "CAN_ATTACH_TO"
+
+        dab_large_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us"
+              level: "CAN_RESTART"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us"
+              level: "CAN_ATTACH_TO"
+
+        Radar_small_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us"
+              level: "CAN_RESTART"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us"
+              level: "CAN_ATTACH_TO"
+
+        Radar_medium_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us"
+              level: "CAN_RESTART"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us"
+              level: "CAN_ATTACH_TO"
+
+        Radar_large_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us"
+              level: "CAN_RESTART"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us"
+              level: "CAN_ATTACH_TO"
+
+  preprod:
+    variables:
+      radar_catalog_name: wr_fj_parties_and_risk_assessment_preprd
+
+    resources:
+      clusters:
+
+        dab_small_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us"
+              level: "CAN_RESTART"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us"
+              level: "CAN_ATTACH_TO"
+
+        dab_medium_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us"
+              level: "CAN_RESTART"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us"
+              level: "CAN_ATTACH_TO"
+
+        dab_large_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us"
+              level: "CAN_RESTART"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us"
+              level: "CAN_ATTACH_TO"
+
+        Radar_small_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us"
+              level: "CAN_RESTART"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us"
+              level: "CAN_ATTACH_TO"
+
+        Radar_medium_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us"
+              level: "CAN_RESTART"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us"
+              level: "CAN_ATTACH_TO"
+
+        Radar_large_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us"
+              level: "CAN_RESTART"
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us"
+              level: "CAN_ATTACH_TO"
+
+  prod:
+    variables:
+      radar_catalog_name: wr_fj_parties_and_risk_assessment_prod
+
+    resources:
+      clusters:
+
+        dab_small_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+
+        dab_medium_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+
+        dab_large_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+
+        Radar_small_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+
+          cluster_name: Radar-small-UC
+          autotermination_minutes: 20
+
+        Radar_medium_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+
+          cluster_name: Radar-medium-UC
+          autotermination_minutes: 20
+
+        Radar_large_cluster:
+          permissions:
+            - group_name: "eu.aut.AADFecRadarAnalyticsEngineerAdmin.us"
+              level: "CAN_MANAGE"
+
+          cluster_name: Radar-large-UC
+          autotermination_minutes: 20

@@ -1,0 +1,74 @@
+# The main job for planet
+
+variables:
+  med_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "radar-medium"
+  # trigger_paused_status: 
+  #   description: PAUSED OR UNPAUSED
+  #   default: PAUSED
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+
+resources:
+  jobs:
+    planet_job:
+      name: planet_job
+
+      permissions:
+        - level: CAN_MANAGE
+          user_name: mattia.didone@rabobank.com
+        - level: CAN_MANAGE
+          user_name: lucija.marjanovic@rabobank.nl
+        - level: CAN_MANAGE
+          user_name: casey.wong@rabobank.nl
+          
+      health:
+        rules:
+          - metric: RUN_DURATION_SECONDS
+            op: GREATER_THAN
+            value: 3600
+
+      schedule:
+        quartz_cron_expression: 37 3 6 * * ?
+        timezone_id: Europe/Amsterdam
+        pause_status: ${var.BUNDLE_VAR_trigger_pause_status}
+
+      email_notifications:
+        on_failure:
+          - mattia.didone@rabobank.com
+          - fm.nl.utrecht.kycdataadmin@rabobank.com
+        # on_duration_warning_threshold_exceeded:
+        #   - mattia.didone@rabobank.com
+        #   - fm.nl.utrecht.kycdataadmin@rabobank.com
+          
+      tasks:
+        - task_key: planet_incrementalload__daily
+          notebook_task:
+            notebook_path: ../src/planet_incrementalload__daily.py
+          existing_cluster_id: ${var.med_cluster_id}
+          
+        - task_key: load_planet_tables_to_dataverse
+          notebook_task:
+            notebook_path: ../src/dataverse/load_planet_tables_to_dataverse.py
+          existing_cluster_id: ${var.med_cluster_id}
+          depends_on:
+            - task_key: planet_incrementalload__daily
+
+        - task_key: N2K_GCID__daily
+          notebook_task:
+            notebook_path: ../src/N2K_GCID__daily.py
+          existing_cluster_id: ${var.med_cluster_id}
+          depends_on:
+            - task_key: planet_incrementalload__daily
+              
+        - task_key: gcds_hierarchy__daily
+          notebook_task:
+            notebook_path: ../src/gcds_hierarchy__daily.py
+          existing_cluster_id: ${var.med_cluster_id}
+          depends_on:
+            - task_key: planet_incrementalload__daily
+
+      queue:
+        enabled: true

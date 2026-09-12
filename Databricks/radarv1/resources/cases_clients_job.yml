@@ -1,0 +1,128 @@
+# The main job for cases_clients
+
+variables:
+  dab_medium_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "DAB-medium"
+  dab_small_cluster_id:
+    description: Cluster ID for DAB cluster 
+    lookup:
+      cluster: "DAB-small"
+  # trigger_paused_status: 
+  #   description: PAUSED OR UNPAUSED
+  #   default: PAUSED
+# reference this as: existing_cluster_id: ${var.dab_medium_cluster_id}
+
+
+resources:
+  jobs:
+    cases_clients_job:
+      name: cases_clients_job
+
+      permissions:
+          - level: CAN_MANAGE
+            user_name: mattia.didone@rabobank.com
+          - level: CAN_MANAGE
+            user_name: casey.wong@rabobank.nl
+          - level: CAN_MANAGE
+            user_name: Lucija.Marjanovic@rabobank.nl
+
+      health:
+        rules:
+          - metric: RUN_DURATION_SECONDS
+            op: GREATER_THAN
+            value: 5400
+
+      schedule:
+        quartz_cron_expression: 0 45 6 * * ?
+        timezone_id: Europe/Amsterdam
+        pause_status: ${var.BUNDLE_VAR_trigger_pause_status}
+
+      email_notifications:
+        on_failure:
+          - mattia.didone@rabobank.com
+          - fm.nl.utrecht.kycdataadmin@rabobank.com
+        # on_duration_warning_threshold_exceeded:
+        #   - mattia.didone@rabobank.com
+        #   - fm.nl.utrecht.kycdataadmin@rabobank.com
+          
+      tasks:
+        - task_key: load_onboardings_from_dataverse
+          notebook_task:
+            notebook_path: ../src/load_onboardings_from_dataverse.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+
+        - task_key: load_masterlistregistry_from_dataverse
+          notebook_task:
+            notebook_path: ../src/load_masterlistregistry_from_dataverse.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+          depends_on:
+            - task_key: load_onboardings_from_dataverse
+
+        - task_key: load_planning_tables_from_dataverse
+          notebook_task:
+            notebook_path: ../src/load_planning_tables_from_dataverse.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+          depends_on:
+            - task_key: load_masterlistregistry_from_dataverse
+              
+        - task_key: qc_createtable__daily
+          notebook_task:
+            notebook_path: ../src/qc_createtable__daily.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+          depends_on:
+            - task_key: load_planning_tables_from_dataverse
+
+        - task_key: cases_clients__daily
+          notebook_task:
+            notebook_path: ../src/cases_clients__daily.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+          depends_on:
+            - task_key: qc_createtable__daily
+
+        - task_key: load_clients_to_dataverse
+          notebook_task:
+            notebook_path: ../src/dataverse/load_clients_to_dataverse.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+          depends_on:
+            - task_key: cases_clients__daily
+
+        - task_key: load_cases_to_dataverse
+          notebook_task:
+            notebook_path: ../src/dataverse/load_cases_to_dataverse.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+          depends_on:
+            - task_key: load_clients_to_dataverse
+        
+        - task_key: rp_createtable__daily
+          notebook_task:
+            notebook_path: ../src/rp_createtable__daily.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+          depends_on:
+            - task_key: cases_clients__daily
+
+        - task_key: FLM_selection_CORP
+          notebook_task:
+            notebook_path: ../FLM SELECTION/CORP FLM Selection.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+          depends_on:
+            - task_key: cases_clients__daily
+              
+        - task_key: FLM_selection_FI
+          notebook_task:
+            notebook_path: ../FLM SELECTION/FI- FLM Selection.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+          depends_on:
+            - task_key: cases_clients__daily
+              
+        - task_key: FLM_Selection_Report_Refresh
+          depends_on:
+            - task_key: FLM_selection_FI
+            - task_key: FLM_selection_CORP
+          notebook_task:
+            notebook_path: ../PowerBI_Refresh/FLM_Selection_Report_Refresh.py
+          existing_cluster_id: ${var.dab_medium_cluster_id}
+        
+      queue:
+        enabled: true

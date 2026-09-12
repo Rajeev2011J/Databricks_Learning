@@ -1,0 +1,11 @@
+command: ["streamlit", "run", "app.py"]
+
+# env:
+#   - name: "LAB_VARIANT"
+#     value: "OpenLab"
+#   - name: "ENVIRONMENT"
+#     value: "prd"
+#   - name: "DATABRICKS_SERVER_HOSTNAME"
+#     value: ""  # e.g. adb-1234567890123456.7.azuredatabricks.net
+#   - name: "DATABRICKS_HTTP_PATH"
+#     value: ""  # SQL Warehouse HTTP path, e.g. /sql/1.0/warehouses/xxxxxxxxxxxxxxxx

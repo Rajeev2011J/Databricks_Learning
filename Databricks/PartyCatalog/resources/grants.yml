@@ -1,0 +1,24 @@
+
+resources:
+  grants:
+    analytics_catalog_usage:
+      catalog: analytics
+      grants:
+        - principal: analytics-users
+          privileges:
+            - USAGE
+
+    curated_schema_access:
+      schema: analytics.curated
+      grants:
+        - principal: analytics-users
+          privileges:
+            - USAGE
+            - SELECT
+
+    customers_table_access:
+      table: analytics.curated.customers
+      grants:
+        - principal: bi-analysts
+          privileges:
+            - SELECT

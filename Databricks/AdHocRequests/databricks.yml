@@ -1,0 +1,40 @@
+# This is a Databricks asset bundle definition for AdHocRequests.
+# See https://docs.databricks.com/dev-tools/bundles/index.html for documentation.
+bundle:
+  name: AdHocRequests
+
+include:
+  - resources/*.yml
+
+targets:
+  
+  dev:
+    mode: production
+    default: true
+    workspace:
+      host: https://adb-3634536606298227.7.azuredatabricks.net
+      root_path: /live/${bundle.name}
+    run_as:
+      service_principal_name: c358ffb6-592c-4fbe-9472-d408dc39428e
+
+
+  preprod:
+    mode: production
+    workspace:
+      host: https://adb-2475554465308574.14.azuredatabricks.net
+      root_path: /live/${bundle.name}
+    run_as:
+      service_principal_name: caec575d-cdd0-4e29-8f1d-4eb8759b12b3
+
+
+  prod:
+    mode: production
+    workspace:
+      host: https://adb-2426369368647006.6.azuredatabricks.net/
+      root_path: /live/${bundle.name}
+    run_as:
+      service_principal_name: caec575d-cdd0-4e29-8f1d-4eb8759b12b3
+      
+    permissions:
+    - group_name: users
+      level: CAN_VIEW

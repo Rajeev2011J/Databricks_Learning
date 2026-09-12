@@ -1,0 +1,278 @@
+variables:
+  dab_large_cluster_id:
+    description: Cluster ID for the DAB Large name 
+    lookup:
+      cluster: "DAB-large"
+  dab_small_cluster_id:
+    description: Cluster ID for DAB small cluster 
+    lookup:
+      cluster: "DAB-small"        
+  Radar_medium_UC_cluster_id:
+    description: Cluster ID for Radar_medium_UC_cluster_id cluster 
+    lookup:
+      cluster: "Radar-medium-UC"   
+  wheel_path:
+    description: Environment specific wheel path    
+
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+resources:
+  jobs:
+    MI_Reporting_job:
+      name: MI_Reporting_job
+
+      # schedule:
+      #   # Run every day at 6:30:00 AM
+      #   quartz_cron_expression: '00 30 6 * * ?'
+      #   timezone_id: Europe/Amsterdam
+      #   pause_status: PAUSED
+
+      tasks:
+        - task_key: AllRelationship
+          notebook_task:
+            notebook_path: ../src/AllRelationship.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+
+        - task_key: BusinessActivities
+          notebook_task:
+            notebook_path: ../src/BusinessActivities.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+        
+        - task_key: CddRisk
+          notebook_task:
+            notebook_path: ../src/CddRisk.py
+          existing_cluster_id: ${var.dab_large_cluster_id}
+        
+        - task_key: MI_LocalRequirements
+          notebook_task:
+            notebook_path: ../src/MI-LocalRequirements.py
+          existing_cluster_id: ${var.dab_small_cluster_id}   
+
+        - task_key: MI_Cases_Product
+          depends_on:
+            - task_key: party_case_impacted_location
+          notebook_task:
+            notebook_path: ../src/MI-Cases-Product.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+        
+        - task_key: party_case_impacted_location
+          notebook_task:
+            notebook_path: ../src/party_case_impacted_location.py
+          existing_cluster_id: ${var.dab_small_cluster_id}    
+
+        - task_key: N2K_GCOB_AAD_UserDetails
+          notebook_task:
+            notebook_path: ../src/N2K_GCOB_AAD_UserDetails.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+
+        - task_key: FI_Clients
+          depends_on:
+            - task_key: MI_LocalRequirements
+          notebook_task:
+            notebook_path: ../src/FI_Clients.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+          
+        - task_key: Control_Measure
+          notebook_task:
+            notebook_path: ../src/Control_Measure.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+
+        - task_key: Name_Screening
+          notebook_task:
+            notebook_path: ../src/NameScreening.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+
+        - task_key: WI-Doc-FatcaCrs-CO-SysId
+          notebook_task:
+            notebook_path: ../src/WorkItem-Documents-FatcaCrs-ClientOwner-SystemIdentifier.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+
+        - task_key: UBO_PEP
+          notebook_task:
+            notebook_path: ../src/UBO_PEP.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+
+        - task_key: Structure_questionnaires
+          notebook_task:
+            notebook_path: ../src/Structure_questionnaires.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+
+        - task_key: ClientTradeName
+          notebook_task:
+            notebook_path: ../src/ClientTradeName.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+          
+        - task_key: ClinetOwnerSupportDelegate
+          notebook_task:
+            notebook_path: ../src/ClientOwnerSupport_Delegate.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+
+        - task_key: MI_RiskDeviation
+          notebook_task:
+            notebook_path: ../src/MI-RiskDeviation.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+
+        - task_key: Nominee_Bearer_Shareholding
+          notebook_task:
+            notebook_path: ../src/Nominee_Bearer_Shareholding.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+
+        - task_key: SanctionCountryScreeningNAW
+          notebook_task:
+            notebook_path: ../src/SanctionCountryScreeningNAW.py
+          existing_cluster_id: ${var.dab_small_cluster_id}
+
+        - task_key: Client_Relationship_Data_Document
+          notebook_task:
+            notebook_path: ../src/Client_Relationship_Data_Document.py
+          existing_cluster_id: ${var.dab_large_cluster_id}
+
+        - task_key: LEC_RLE_RNP_RANZ
+          notebook_task:
+            notebook_path: "../src/LEC_RLE_RNP_RANZ.py"
+          existing_cluster_id: ${var.dab_large_cluster_id}
+          
+        - task_key: ExpectedTransactionProfile
+          notebook_task:
+            notebook_path: "../src/ExpectedTransactionProfile(ETP).py"
+          existing_cluster_id: ${var.dab_large_cluster_id}
+
+        - task_key: SustainabilityQuestionAnswers
+          notebook_task:
+            notebook_path: ../src/SustainabilityQuestionAnswers.py
+          existing_cluster_id: ${var.Radar_medium_UC_cluster_id}
+          libraries:
+            - whl: ${var.wheel_path[0]}
+            - whl: ${var.wheel_path[1]}
+            - whl: ${var.wheel_path[2]}
+            - whl: ${var.wheel_path[3]}
+            - whl: ${var.wheel_path[4]}
+            - whl: ${var.wheel_path[5]}
+            
+
+        - task_key: GCOB_MI_UC_RLS_N2K
+          depends_on:
+            - task_key: AllRelationship
+            - task_key: BusinessActivities
+            - task_key: CddRisk
+            - task_key: MI_Cases_Product
+            - task_key: FI_Clients
+            - task_key: Control_Measure
+            - task_key: Name_Screening
+            - task_key: WI-Doc-FatcaCrs-CO-SysId
+            - task_key: UBO_PEP
+            - task_key: Structure_questionnaires
+            - task_key: ClientTradeName
+            - task_key: ClinetOwnerSupportDelegate
+            - task_key: MI_RiskDeviation
+            - task_key: SanctionCountryScreeningNAW
+            - task_key: LEC_RLE_RNP_RANZ
+            - task_key: ExpectedTransactionProfile  
+              
+          notebook_task:
+            notebook_path: ../src/GCOB_MI_UC_RLS_N2K.py
+          existing_cluster_id: ${var.Radar_medium_UC_cluster_id}
+          libraries:
+            - whl: ${var.wheel_path[0]}
+            - whl: ${var.wheel_path[1]}
+            - whl: ${var.wheel_path[2]}
+            - whl: ${var.wheel_path[3]}
+            - whl: ${var.wheel_path[4]}
+            - whl: ${var.wheel_path[5]}
+
+
+        - task_key: MI_Report_Refresh
+          depends_on:
+            - task_key: AllRelationship
+            - task_key: BusinessActivities
+            - task_key: CddRisk
+            - task_key: MI_Cases_Product
+            - task_key: FI_Clients
+            - task_key: Control_Measure
+            - task_key: Name_Screening
+            - task_key: WI-Doc-FatcaCrs-CO-SysId
+            - task_key: UBO_PEP
+            - task_key: Structure_questionnaires
+            - task_key: ClientTradeName
+            - task_key: ClinetOwnerSupportDelegate
+            - task_key: MI_RiskDeviation
+            - task_key: SanctionCountryScreeningNAW
+            - task_key: LEC_RLE_RNP_RANZ
+            - task_key: ExpectedTransactionProfile
+          notebook_task:
+            notebook_path: ../PowerBI_Refresh/MI_Report_Refresh.py
+          existing_cluster_id: ${var.dab_large_cluster_id}
+      tags:
+        Asset Bundle: ""
+      queue:
+        enabled: true
+
+targets:
+  prod:
+    default: true
+    resources:
+      jobs:
+        MI_Reporting_job:
+          name: MI_Reporting_job
+
+          permissions:
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerAdmin.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us
+              level: CAN_VIEW          
+
+          schedule:
+            quartz_cron_expression: '0 30 6 * * ?'  # 09:00 AM
+            timezone_id: Europe/Amsterdam
+            pause_status: PAUSED
+
+          email_notifications:
+            on_failure:
+              - ruud.van.laar@rabobank.com
+              - fm.global.KYCReportingSupport@rabobank.com
+  preprod:
+    default: true
+    resources:
+      jobs:
+        MI_Reporting_job:
+          name: MI_Reporting_job
+
+          permissions:
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerAdmin.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us
+              level: CAN_VIEW
+
+          schedule:
+            quartz_cron_expression: '0 30 7 * * ?'  # 09:00 AM
+            timezone_id: Europe/Amsterdam
+            pause_status: PAUSED
+  dev:
+    default: true
+    resources:
+      jobs:
+        MI_Reporting_job:
+          name: MI_Reporting_job
+
+          permissions:
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+              level: CAN_MANAGE_RUN
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerAdmin.us
+              level: CAN_MANAGE
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us
+              level: CAN_VIEW
+            
+          schedule:
+            quartz_cron_expression: '0 30 6 * * ?'  # 09:00 AM
+            timezone_id: Europe/Amsterdam
+            pause_status: PAUSED

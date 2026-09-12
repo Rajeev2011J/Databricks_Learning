@@ -1,0 +1,58 @@
+# The job for powerapps_gdpdataobjects
+variables:
+  med_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "radar-medium"
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+resources:
+  jobs:
+    powerapps_gdp_job:
+      name: powerapps_gdp_job
+
+      permissions:
+        - level: CAN_MANAGE
+          user_name: mattia.didone@rabobank.com
+        - level: CAN_MANAGE
+          user_name: lucija.marjanovic@rabobank.nl
+        - level: CAN_MANAGE
+          user_name: casey.wong@rabobank.nl         
+
+      schedule:
+        quartz_cron_expression:  0 10 1 * * ?
+        timezone_id: UTC
+        pause_status: UNPAUSED
+
+      tasks:
+        - task_key: PowerAppsGDP
+          notebook_task:
+            notebook_path: ../PowerAppsGDP/dataverse_to_saradar.py
+          existing_cluster_id: ${var.med_cluster_id}
+
+        - task_key: Planningdata_to_RadarStorage
+          notebook_task:
+            notebook_path: ../PowerAppsGDP/DataversePlanningdata_to_RadarStorage.py
+          existing_cluster_id: ${var.med_cluster_id}
+
+      tags:
+        Asset Bundle: ""
+      queue:
+        enabled: true
+
+targets:
+  prod:
+    default: true
+    resources:
+      jobs:
+        powerapps_gdp_job:
+          name: powerapps_gdp_job
+
+          email_notifications:
+            on_failure:
+              - ruud.van.laar@rabobank.com
+              - fm.global.KYCReportingSupport@rabobank.com
+  preprd:
+    default: true
+  dev:
+    default: true

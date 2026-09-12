@@ -1,0 +1,185 @@
+variables:
+  dab_large_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "DAB-large"
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+resources:
+  jobs:
+    Non_MI_Reporting_job:
+      name: Non_MI_Reporting_job
+
+      schedule:
+        # Run every day at 8:37 AM
+        quartz_cron_expression: '44 30 6 * * ?'
+        timezone_id: Europe/Amsterdam
+        pause_status: PAUSED
+
+      tasks:
+        - task_key: GlobalNameScreening
+          notebook_task:
+            notebook_path: ../src/GlobalNameScreening.py
+          existing_cluster_id: ${var.dab_large_cluster_id}
+        
+        - task_key: GNS_Test
+          depends_on:
+            - task_key: GlobalNameScreening
+          notebook_task:
+            notebook_path: ../tests/GNS_Test.py
+          existing_cluster_id: ${var.dab_large_cluster_id}
+            
+        - task_key: Quality-Control
+          notebook_task:
+            notebook_path: ../src/Quality-Control.py
+          existing_cluster_id: ${var.dab_large_cluster_id}
+
+        - task_key: HongKong_RelatedParties
+          notebook_task:
+            notebook_path: ../src/HongKong_RelatedParties.py
+          existing_cluster_id: ${var.dab_large_cluster_id}  
+
+        - task_key: Singapore_RelatedParties
+          notebook_task:
+            notebook_path: ../src/Singapore_RelatedParties.py
+          existing_cluster_id: ${var.dab_large_cluster_id} 
+
+        - task_key: Riskshield_TM
+          notebook_task:
+            notebook_path: "../src/Riskshield_TM.py"
+          existing_cluster_id: ${var.dab_large_cluster_id}
+
+        - task_key: Global_File_Report
+          notebook_task:
+            notebook_path: "../src/Global_File_Report.py"
+          existing_cluster_id: ${var.dab_large_cluster_id}
+
+        - task_key: NonMI_Report_Refresh
+          depends_on:
+            - task_key: Quality-Control
+            - task_key: Global_File_Report
+          notebook_task:
+            notebook_path: ../PowerBI_Refresh/NonMI_Report_Refresh.py
+          existing_cluster_id: ${var.dab_large_cluster_id}
+
+      tags:
+        Asset Bundle: ""
+      queue:
+        enabled: true
+
+
+    MDM_RANZ_job:
+      name: MDM_RANZ_job
+
+      schedule:
+        # Run once on the first business day of the month at 10:00 AM CET
+        quartz_cron_expression: '0 0 10 1W * ?'
+        timezone_id: Europe/Amsterdam
+        pause_status: UNPAUSED
+
+      tasks:
+        - task_key: MDM_RANZ
+          notebook_task:
+            notebook_path: ../src/MDM_RANZ.py
+          existing_cluster_id: ${var.dab_large_cluster_id}
+      tags:
+        Asset Bundle: ""
+      queue:
+        enabled: true
+
+    # Riskshield_TM_job:
+    #   name: Riskshield_TM_job
+    #   schedule:
+    #     quartz_cron_expression: '0 30 6 ? * MON-FRI'  # Weekdays only
+    #     timezone_id: Europe/Amsterdam
+    #     pause_status: PAUSED
+    #   tasks:
+    #     - task_key: Riskshield_TM
+    #       notebook_task:
+    #         notebook_path: "../src/Riskshield_TM.py"
+    #       existing_cluster_id: ${var.dab_large_cluster_id}
+      # tags:
+      #   Asset Bundle: ""
+      # queue:
+      #   enabled: true
+
+
+targets:
+  prod:
+    default: true
+    resources:
+      jobs:
+        Non_MI_Reporting_job:
+          name: Non_MI_Reporting_job
+
+          permissions:
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerAdmin.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us
+              level: CAN_VIEW
+
+          schedule:
+            quartz_cron_expression: '0 30 6 * * ?'  # 08:30 AM
+            timezone_id: Europe/Amsterdam
+          email_notifications:
+            on_failure:
+              - ruud.van.laar@rabobank.com
+              - fm.global.KYCReportingSupport@rabobank.com
+ 
+        MDM_RANZ_job:
+          name: MDM_RANZ_job
+          email_notifications:
+            on_failure:
+              - ruud.van.laar@rabobank.com
+              - fm.global.KYCReportingSupport@rabobank.com
+
+        # Riskshield_TM_job:
+        #   name: Riskshield_TM_job
+        #   email_notifications:
+        #     on_failure:
+        #       - ruud.van.laar@rabobank.com
+        #       - fm.global.KYCReportingSupport@rabobank.com
+ 
+  preprod:
+    resources:
+      jobs:
+        Non_MI_Reporting_job:
+          name: Non_MI_Reporting_job
+
+          permissions:
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerAdmin.us
+              level: CAN_VIEW
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us
+              level: CAN_VIEW
+
+          schedule:
+            quartz_cron_expression: '0 30 7 * * ?'  # 09:00 AM
+            timezone_id: Europe/Amsterdam
+  dev:
+    resources:
+      jobs:
+        Non_MI_Reporting_job:
+          name: Non_MI_Reporting_job
+
+          permissions:
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+              level: CAN_MANAGE_RUN
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerAdmin.us
+              level: CAN_MANAGE
+
+            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us
+              level: CAN_VIEW
+
+          schedule:
+            quartz_cron_expression: '0 30 6 * * ?'  # 10:00 AM
+            timezone_id: Europe/Amsterdam
+ 

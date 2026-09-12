@@ -1,0 +1,21 @@
+
+resources:
+  tables:
+    party:
+      catalog_name: wr_fj_parties_and_risk_assessment_dev
+      schema_name: gcobreportingv103
+      name: party
+      table_type: MANAGED
+      data_source_format: DELTA
+      comment: party master data
+      columns:
+        - name: GCID
+          type: string
+        - name: GCOBID
+          type: string
+        - name: FullLegalName
+          type: string
+        - name: GCOname
+          type: string
+        - name: OnboardingDate
+          type: timestamp

@@ -1,0 +1,50 @@
+variables:
+  med_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "radar-medium"
+  dab_large_cluster_id:
+    description: Cluster ID for the DAB Large name 
+    lookup:
+      cluster: "DAB-large"
+# reference this as: existing_cluster_id: ${var.med_cluster_id}
+
+resources:
+  jobs:
+    AMLWLMReporting_job:
+      name: AMLWLMReporting_job
+
+      schedule:
+        # Runs on 2nd of every month at 6:30 AM
+        quartz_cron_expression: '44 30 6 2 * ?'
+        timezone_id: Europe/Amsterdam
+        pause_status: UNPAUSED
+
+      tasks:
+        - task_key: Region_EU_Sepa_Transactions
+          notebook_task:
+            notebook_path: ../src/Region_EU_Sepa_Transactions.py
+          existing_cluster_id: ${var.med_cluster_id}
+        - task_key: AMLWLM_Report_Refresh
+          depends_on:
+            - task_key: Region_EU_Sepa_Transactions
+          notebook_task:
+            notebook_path: ../PowerBI_Refresh/AMLWLM_Report_Refresh.py
+          existing_cluster_id: ${var.dab_large_cluster_id}
+
+targets:
+  prod:
+    default: true
+    resources:
+      jobs:
+        AMLWLMReporting_job:
+          name: AMLWLMReporting_job
+
+          email_notifications:
+            on_failure:
+              - ruud.van.laar@rabobank.com
+              - fm.global.KYCReportingSupport@rabobank.com
+  preprd:
+    default: true
+  dev:
+    default: true

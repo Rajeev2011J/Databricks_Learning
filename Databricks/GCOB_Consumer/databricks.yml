@@ -1,0 +1,68 @@
+# This is a Databricks asset bundle definition for GCOB_Reportingv1.
+# See https://docs.databricks.com/dev-tools/bundles/index.html for documentation.
+bundle:
+  name: GCOB_Consumer
+
+include:
+  - resources/*.yml
+variables:
+  wheel_files:
+    description: "Common wheel file names"
+    default:
+      - "azure_cosmos-4.15.0-py3-none-any.whl"
+      - "azure_identity-1.25.3-py3-none-any.whl"
+      - "azure_storage_blob-12.28.0-py3-none-any.whl"
+      - "msal-1.38.0-py3-none-any.whl"
+      - "openpyxl-3.1.0-py2.py3-none-any.whl"
+      - "et_xmlfile-2.0.0-py3-none-any.whl"
+  library_base_path:
+    description: "Base path for wheel libraries"
+    default: "/Volumes/wr_fj_parties_and_risk_assessment_dev/radar/libraries"
+  wheel_path:
+        description: "Resolved wheel paths"
+        default:
+          - "${var.library_base_path}/${var.wheel_files[0]}"
+          - "${var.library_base_path}/${var.wheel_files[1]}"
+          - "${var.library_base_path}/${var.wheel_files[2]}"
+          - "${var.library_base_path}/${var.wheel_files[3]}"
+          - "${var.library_base_path}/${var.wheel_files[4]}"
+          - "${var.library_base_path}/${var.wheel_files[5]}"   
+        
+
+targets:
+
+  dev:
+    mode: production
+    default: true
+    variables:  
+      library_base_path: "/Volumes/wr_fj_parties_and_risk_assessment_dev/radar/libraries"
+    workspace:
+      host: https://adb-3634536606298227.7.azuredatabricks.net
+      root_path: /live/${bundle.name}
+    run_as:
+      service_principal_name: c358ffb6-592c-4fbe-9472-d408dc39428e
+          
+ 
+  preprod:
+    mode: production
+    variables:
+      library_base_path: "/Volumes/wr_fj_parties_and_risk_assessment_preprd/radar/libraries"
+    workspace:
+      host: https://adb-2475554465308574.14.azuredatabricks.net
+      root_path: /live/${bundle.name}
+    run_as:
+      service_principal_name: caec575d-cdd0-4e29-8f1d-4eb8759b12b3    
+
+  prod:
+    mode: production
+    variables:
+      library_base_path: "/Volumes/wr_fj_parties_and_risk_assessment_prod/radar/libraries"
+    workspace:
+      host: https://adb-2426369368647006.6.azuredatabricks.net/
+      root_path: /live/${bundle.name}
+    run_as:
+      service_principal_name: caec575d-cdd0-4e29-8f1d-4eb8759b12b3
+
+    permissions:
+    - group_name: users
+      level: CAN_VIEW

@@ -1,0 +1,33 @@
+# The main job for GCOB_Reportingv1.
+variables:
+  UC_cluster_id:
+    description: Cluster ID for the given name 
+    lookup:
+      cluster: "Radar-small-UC"  
+
+# jobs / tasks
+resources:
+  jobs:
+    FLM_Monthly_Selections:
+      name: FLM_ACAMS-BASED-selection
+
+      permissions:
+        - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+          level: CAN_MANAGE_RUN
+
+      queue:
+        enabled: true
+    
+      tasks:
+        - task_key: Riskshield_monthly_select
+          notebook_task:
+            notebook_path: ../FLM SELECTION/Riskshield Namescreening for FLM EEA.py
+          existing_cluster_id: ${var.UC_cluster_id}
+          libraries:
+            - whl: ${var.wheel_path[0]}
+            - whl: ${var.wheel_path[1]}
+            - whl: ${var.wheel_path[2]}
+            - whl: ${var.wheel_path[3]}
+            - whl: ${var.wheel_path[4]}
+            - whl: ${var.wheel_path[5]}          
+    
