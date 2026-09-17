@@ -101,7 +101,6 @@ PARTY_CLIENT_STRUCTURE_GUI_SCHEMA = StructType([
     StructField("UniqueChildPartyId",             StringType(),  True),
     StructField("ClientStructureSnapshotId",      StringType(),  True),
     StructField("IsLatestApprovedVersionOfClient", BooleanType(), True),
-    StructField("ClientLifeCycleName",            StringType(),  True),
 ])
 
 PARTY_WORKITEM_SCHEMA = StructType([
@@ -115,7 +114,7 @@ PARTY_WORKITEM_SCHEMA = StructType([
 ])
 
 RISK_MODEL_INSTANCE_SCHEMA = StructType([
-    StructField("SourceClient",    StringType(), False),
+    StructField("SourceClient",    StringType(), True),
     StructField("InstanceId",      StringType(), True),
     StructField("RiskModelName",   StringType(), True),
 ])
@@ -246,34 +245,31 @@ def party_client_structure_gui_df(spark: SparkSession) -> DataFrame:
             "Acme Corp NV", "Client", "Completed", "Periodic Review", "NL",
             "PARENT-001", "Parent Corp", "LegalEntityClient",
             "CHILD-001",  "Acme Corp NV", "LegalEntityClient",
-            "Ownership", "UNIQ-PARENT-001", "UNIQ-001", "SNAP-001", True, "Client",
+            "Ownership", "UNIQ-PARENT-001", "UNIQ-001", "SNAP-001", True,
         ),
         (
             "SC-001", "UG-001", "GCOB-001", "CASE-001",
             "Acme Corp NV", "Client", "Completed", "Periodic Review", "NL",
             "PARENT-001", "Parent Corp", "LegalEntityClient",
             "CHILD-002",  "Director Person", "NaturalPersonClient",
-            "Directorship", "UNIQ-PARENT-001", "UNIQ-002", "SNAP-001", True, "Client",
+            "Directorship", "UNIQ-PARENT-001", "UNIQ-002", "SNAP-001", True,
         ),
         (
             "SC-002", "UG-002", "GCOB-002", "CASE-002",
             "Beta BV", "Client", "Completed", "Onboarding", "DE",
             "PARENT-002", "Beta Holding", "LegalEntityClient",
             "CHILD-003",  "Beta BV", "LegalEntityClient",
-            "Shareholder", "UNIQ-PARENT-002", "UNIQ-003", "SNAP-002", True, "Client",
+            "Shareholder", "UNIQ-PARENT-002", "UNIQ-003", "SNAP-002", True,
         ),
         (
             "SC-003", "UG-003", "GCOB-003", "CASE-003",
             "Gamma Corp", "Client", "Completed", "Periodic Review", "FR",
             "PARENT-003", "Gamma Holding", "LegalEntityClient",
             "CHILD-004",  "Gamma Corp", "LegalEntityClient",
-            "Authorised Representative", "UNIQ-PARENT-003", "UNIQ-004", "SNAP-003", True, "Client",
+            "Authorised Representative", "UNIQ-PARENT-003", "UNIQ-004", "SNAP-003", True,
         ),
     ]
-    # Rebuild schema without duplicate field (ClientLifeCycleName appears twice in source — deduplicate)
-    schema = StructType([f for i, f in enumerate(PARTY_CLIENT_STRUCTURE_GUI_SCHEMA)
-                         if f.name not in [ff.name for ff in PARTY_CLIENT_STRUCTURE_GUI_SCHEMA[:i]]])
-    return spark.createDataFrame(rows, schema=schema)
+    return spark.createDataFrame(rows, schema=PARTY_CLIENT_STRUCTURE_GUI_SCHEMA)
 
 
 def risk_model_instance_df(spark: SparkSession) -> DataFrame:

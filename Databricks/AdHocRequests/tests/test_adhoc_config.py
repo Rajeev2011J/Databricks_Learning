@@ -34,6 +34,18 @@ import pytest
 import yaml
 
 # ---------------------------------------------------------------------------
+# AdHocRequests YAML tests are local_only: they read databricks.yml from
+# the local filesystem. On a Databricks cluster those paths don't resolve.
+# Run with:  pytest -m "not local_only"  to skip on cluster.
+# ---------------------------------------------------------------------------
+from environment import IS_DATABRICKS
+
+pytestmark = [
+    pytest.mark.local_only,
+    pytest.mark.skipif(IS_DATABRICKS, reason="YAML file tests require local filesystem"),
+]
+
+# ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 _BUNDLE_ROOT   = Path(__file__).parents[1]          # …/AdHocRequests/

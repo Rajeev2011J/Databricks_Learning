@@ -1,0 +1,620 @@
+# ============================================================================
+# Enterprise Azure DevOps Pipeline for Databricks Asset Bundles
+# ============================================================================
+# Adapted from DAB-GCOB-reporting.yml to work with centralized test structure
+# Tests ALL 6 bundles: radarv1, GCOB_Consumer, GCOB_Reportingv1, 
+#                      clusters, AdHocRequests, PartyCatalog
+# Uses centralized tests/ directory with shared conftest.py and fixtures
+# ============================================================================
+
+trigger:
+  branches:
+    include:
+      - development
+      - preprod
+      - main
+  paths:
+    include:
+      - Databricks/**
+    exclude:
+      - DevOpsPipelines/*
+
+resources:
+  repositories:
+    - repository: self
+      type: git
+      name: WR_Financing_Journey_Tribe_and_Service_Centre/R-FEC-RADAR
+    - repository: templates
+      type: git
+      name: WR_Financing_Journey_Tribe_and_Service_Centre/R-FEC-RADAR-pipelines-template
+      ref: refs/heads/main
+
+pool:
+  name: 'Shared-EU-Container-Linux-Python-S-Prod'
+
+variables:
+  - group: L-FEC-RADAR
+  - group: NexusCloud_eu.NpaRadarNexusUser@rabobank.com
+  
+  - name: NEXUSCLOUD_GROUP_REPO
+    value: gr-pypi-174
+  
+  - name: NEXUSCLOUD_PYPI_URL
+    value: https://$(NEXUSCLOUD_USERNAME):$(NEXUSCLOUD_PASSWORD)@internal.euprodnexuscloud1.aws.rabonet.com/repository/$(NEXUSCLOUD_GROUP_REPO)/simple
+  
+  - name: COVERAGE_THRESHOLD
+    value: 60  # Centralized tests start at 60%, can increase over time
+  
+  - name: PYTHON_VERSION
+    value: '3.11.x'
+
+stages:
+  # ==========================================================================
+  # STAGE 1: BUILD & TEST
+  # ==========================================================================
+  - stage: Build
+    displayName: 'Continuous Integration'
+    jobs:
+      # Security compliance scans
+      - template: compliancyscans/secretscan.yml
+      
+      - job: 'CI'
+        displayName: 'Build & Test All Bundles'
+        steps:
+          # ----------------------------------------------------------------
+          # Security Scans
+          # ----------------------------------------------------------------
+          - template: compliancyscans/sonarqube.yml@templates
+            parameters:
+              sonarCubeProjectName: RADAR-All-Bundles
+
+          - template: compliancyscans/checkmarx.yml
+
+          # ----------------------------------------------------------------
+          # CRITICAL: Install Java 17 for PySpark
+          # PySpark requires JRE to initialize SparkContext in CI
+          # ----------------------------------------------------------------
+          - task: JavaToolInstaller@0
+            displayName: 'Install Java 17 for PySpark'
+            inputs:
+              versionSpec: '17'
+              jdkArchitectureOption: 'x64'
+              jdkSourceOption: 'PreInstalled'
+
+          - task: Bash@3
+            displayName: 'Validate Java Installation'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                echo "=========================================="
+                echo "Java Version Validation"
+                echo "=========================================="
+                java -version
+                echo ""
+                echo "JAVA_HOME: $JAVA_HOME"
+                
+                if ! command -v java &> /dev/null; then
+                  echo "[ERROR] Java not available - PySpark tests will fail"
+                  exit 1
+                fi
+                
+                echo "[PASS] Java is ready for PySpark"
+
+          # ----------------------------------------------------------------
+          # CRITICAL: Pin Python 3.11 (cloudpickle compatibility)
+          # Python 3.12+ causes issues with PySpark 3.5.5
+          # ----------------------------------------------------------------
+          - task: UsePythonVersion@0
+            displayName: 'Install Python 3.11.x (STRICT)'
+            inputs:
+              versionSpec: '$(PYTHON_VERSION)'
+              addToPath: true
+              architecture: 'x64'
+
+          - task: Bash@3
+            displayName: 'Validate Python 3.11 is Active'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                
+                PYTHON_VERSION=$(python --version 2>&1 | awk '{print $2}')
+                PYTHON_MAJOR_MINOR=$(echo $PYTHON_VERSION | cut -d. -f1,2)
+                
+                echo "=========================================="
+                echo "Python Version Validation"
+                echo "=========================================="
+                echo "Active: $PYTHON_VERSION"
+                
+                if [ "$PYTHON_MAJOR_MINOR" != "3.11" ]; then
+                  echo "[ERROR] Python 3.11 required, got $PYTHON_VERSION"
+                  exit 1
+                fi
+                
+                echo "[PASS] Python 3.11 is active"
+
+          # ----------------------------------------------------------------
+          # Verify Centralized Test Structure
+          # ----------------------------------------------------------------
+          - task: Bash@3
+            displayName: 'Verify Centralized Test Structure'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                
+                echo "=========================================="
+                echo "CENTRALIZED TEST STRUCTURE VERIFICATION"
+                echo "=========================================="
+                
+                cd Databricks
+                
+                # Check for centralized conftest.py
+                if [ -f "tests/conftest.py" ]; then
+                  echo "✅ Centralized conftest.py found"
+                  echo "   Path: Databricks/tests/conftest.py"
+                  echo "   Size: $(wc -c < tests/conftest.py) bytes"
+                  echo "   Lines: $(wc -l < tests/conftest.py)"
+                else
+                  echo "❌ Centralized conftest.py NOT FOUND"
+                  echo "   Expected: Databricks/tests/conftest.py"
+                  exit 1
+                fi
+                
+                # Check for pyproject.toml
+                if [ -f "pyproject.toml" ]; then
+                  echo "✅ pyproject.toml found"
+                  echo "   Centralized pytest configuration"
+                else
+                  echo "❌ pyproject.toml NOT FOUND"
+                  exit 1
+                fi
+                
+                # Check for run_tests.sh
+                if [ -f "run_tests.sh" ] && [ -x "run_tests.sh" ]; then
+                  echo "✅ run_tests.sh found and executable"
+                else
+                  echo "⚠️  run_tests.sh not found or not executable"
+                fi
+                
+                echo ""
+                echo "Bundle test directories:"
+                for bundle in radarv1 GCOB_Consumer GCOB_Reportingv1 clusters AdHocRequests PartyCatalog; do
+                  if [ -d "$bundle/tests" ]; then
+                    TEST_COUNT=$(find $bundle/tests -name 'test_*.py' | wc -l)
+                    echo "  ✅ $bundle/tests/ ($TEST_COUNT test files)"
+                  else
+                    echo "  ⚠️  $bundle/tests/ not found"
+                  fi
+                done
+                
+                echo ""
+                echo "[PASS] Centralized test structure verified"
+
+          # ----------------------------------------------------------------
+          # Cache pytest dependencies for faster builds
+          # ----------------------------------------------------------------
+          - task: Cache@2
+            displayName: 'Cache Python Dependencies'
+            inputs:
+              key: 'pytest-centralized | "$(Agent.OS)" | "py3.11" | Databricks/requirements-dev.txt'
+              path: '$(Pipeline.Workspace)/.pip'
+              cacheHitVar: 'PIP_CACHE_RESTORED'
+
+          # ----------------------------------------------------------------
+          # Install Test Dependencies from Internal Nexus
+          # Bank policy: All packages MUST come from internal Nexus
+          # ----------------------------------------------------------------
+          - task: Bash@3
+            displayName: 'Install Test Dependencies (Internal Nexus)'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                
+                echo "=========================================="
+                echo "Installing Test Dependencies"
+                echo "=========================================="
+                
+                cd Databricks
+                
+                # Upgrade pip
+                python -m pip install --upgrade pip
+                
+                echo ""
+                echo "Installing from internal NexusCloud..."
+                echo "Repository: $(NEXUSCLOUD_PYPI_URL)"
+                
+                # Install from requirements-dev.txt via Nexus
+                # If requirements-dev.txt doesn't exist, install core packages
+                if [ -f "requirements-dev.txt" ]; then
+                  pip install --cache-dir=$(Pipeline.Workspace)/.pip \
+                    -r requirements-dev.txt \
+                    --index-url $(NEXUSCLOUD_PYPI_URL) \
+                    --timeout 30
+                else
+                  # Fallback: install core test packages
+                  pip install --cache-dir=$(Pipeline.Workspace)/.pip \
+                    pytest==8.3.5 \
+                    pyspark==3.5.5 \
+                    pytest-cov==6.0.0 \
+                    pytest-html==3.2.0 \
+                    pytest-metadata==3.0.0 \
+                    pytest-xdist==3.5.0 \
+                    --index-url $(NEXUSCLOUD_PYPI_URL) \
+                    --timeout 30
+                fi
+                
+                echo ""
+                echo "[PASS] Dependencies installed from internal Nexus"
+                echo ""
+                echo "Installed packages:"
+                pip list | grep -E "(pytest|pyspark|coverage)"
+
+          # ----------------------------------------------------------------
+          # Clear Stale Coverage Files
+          # ----------------------------------------------------------------
+          - task: Bash@3
+            displayName: 'Clear Stale Coverage Files'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                cd $(system.defaultworkingdirectory)/Databricks
+                
+                echo "=========================================="
+                echo "Clearing Stale Coverage Files"
+                echo "=========================================="
+                
+                rm -f .coverage coverage.xml coverage.json
+                rm -rf htmlcov/
+                
+                echo "[DONE] Ready for fresh coverage data"
+
+          # ----------------------------------------------------------------
+          # Set Required Environment Variables for CI
+          # These are auto-injected by conftest.py, but we set them anyway
+          # ----------------------------------------------------------------
+          - task: Bash@3
+            displayName: 'Configure Test Environment Variables'
+            inputs:
+              targetType: 'inline'
+              script: |
+                # CI detection (conftest.py will detect Azure DevOps automatically)
+                echo "##vso[task.setvariable variable=CI]true"
+                echo "##vso[task.setvariable variable=BUILD_BUILDID]$(Build.BuildId)"
+                echo "##vso[task.setvariable variable=TF_BUILD]True"
+                
+                # Mock credentials for testing (if not already set by variable groups)
+                echo "##vso[task.setvariable variable=APP_REG_APP_ID]test-app-id-ci"
+                echo "##vso[task.setvariable variable=TENANT_ID]test-tenant-id-ci"
+                echo "##vso[task.setvariable variable=ENV]ci"
+                
+                echo "[DONE] Environment variables configured for CI"
+
+          # ----------------------------------------------------------------
+          # RUN CENTRALIZED TEST SUITE
+          # Tests all 6 bundles using centralized conftest.py
+          # ----------------------------------------------------------------
+          - task: Bash@3
+            displayName: 'Run Centralized Test Suite (All Bundles)'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                
+                cd $(system.defaultworkingdirectory)/Databricks
+                
+                echo "=========================================="
+                echo "RUNNING CENTRALIZED TEST SUITE"
+                echo "=========================================="
+                echo ""
+                echo "Testing bundles:"
+                echo "  - radarv1"
+                echo "  - GCOB_Consumer"
+                echo "  - GCOB_Reportingv1"
+                echo "  - clusters"
+                echo "  - AdHocRequests"
+                echo "  - PartyCatalog"
+                echo ""
+                echo "Using centralized:"
+                echo "  - tests/conftest.py (environment detection + fixtures)"
+                echo "  - pyproject.toml (pytest configuration)"
+                echo ""
+                
+                # Run pytest with centralized configuration
+                # pyproject.toml defines test paths, pythonpath, markers, etc.
+                # -m "not local_only" skips filesystem-dependent YAML config tests
+                pytest \
+                  --junitxml=test-results.xml \
+                  --html=test-report.html \
+                  --self-contained-html \
+                  --cov=radarv1/src \
+                  --cov=GCOB_Consumer/src \
+                  --cov=GCOB_Reportingv1/src \
+                  --cov=clusters/src \
+                  --cov=AdHocRequests/src \
+                  --cov=PartyCatalog/src \
+                  --cov-report=xml:coverage.xml \
+                  --cov-report=html:htmlcov \
+                  --cov-report=json:coverage.json \
+                  --cov-report=term \
+                  --cov-report=term-missing \
+                  --cov-context=test \
+                  --tb=short \
+                  --durations=10 \
+                  -m "not local_only" \
+                  -v \
+                  -s
+                
+                echo ""
+                echo "=========================================="
+                echo "Test Execution Complete"
+                echo "=========================================="
+
+          # ----------------------------------------------------------------
+          # Display Test & Coverage Summary
+          # ----------------------------------------------------------------
+          - task: Bash@3
+            displayName: 'Display Test & Coverage Summary'
+            inputs:
+              targetType: 'inline'
+              script: |
+                cd $(system.defaultworkingdirectory)/Databricks
+                
+                echo "=========================================="
+                echo "COVERAGE SUMMARY"
+                echo "=========================================="
+                
+                python <<'EOF'
+                import xml.etree.ElementTree as ET
+                
+                tree = ET.parse('coverage.xml')
+                root = tree.getroot()
+                
+                line_rate = float(root.attrib.get('line-rate', 0)) * 100
+                branch_rate = float(root.attrib.get('branch-rate', 0)) * 100
+                
+                print(f"Line Coverage:   {line_rate:.2f}%")
+                print(f"Branch Coverage: {branch_rate:.2f}%")
+                print("")
+                print("Per-Bundle Coverage:")
+                print("-" * 60)
+                
+                for pkg in root.findall('.//package'):
+                    pkg_name = pkg.attrib.get('name', '')
+                    pkg_rate = float(pkg.attrib.get('line-rate', 0)) * 100
+                    print(f"  {pkg_name:<40} {pkg_rate:>6.2f}%")
+                EOF
+                
+                echo ""
+                echo "=========================================="
+                echo "TEST SUMMARY"
+                echo "=========================================="
+                
+                python <<'EOF'
+                import xml.etree.ElementTree as ET
+                
+                tree = ET.parse('test-results.xml')
+                root = tree.getroot()
+                
+                total = int(root.attrib.get('tests', 0))
+                failures = int(root.attrib.get('failures', 0))
+                errors = int(root.attrib.get('errors', 0))
+                skipped = int(root.attrib.get('skipped', 0))
+                time_taken = float(root.attrib.get('time', 0))
+                
+                passed = total - failures - errors - skipped
+                
+                print(f"Total Tests:     {total}")
+                print(f"Passed:          {passed}")
+                print(f"Failed:          {failures}")
+                print(f"Errors:          {errors}")
+                print(f"Skipped:         {skipped}")
+                print(f"Duration:        {time_taken:.2f}s")
+                print(f"Success Rate:    {(passed/total*100) if total > 0 else 0:.1f}%")
+                EOF
+            condition: always()
+
+          # ----------------------------------------------------------------
+          # Publish Test Results to Azure DevOps
+          # ----------------------------------------------------------------
+          - task: PublishTestResults@2
+            displayName: 'Publish Test Results'
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'Databricks/test-results.xml'
+              testRunTitle: 'Centralized Tests - All Bundles'
+              failTaskOnFailedTests: true
+            condition: always()
+
+          # ----------------------------------------------------------------
+          # Publish Code Coverage to Azure DevOps
+          # ----------------------------------------------------------------
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publish Code Coverage'
+            inputs:
+              codeCoverageTool: 'Cobertura'
+              summaryFileLocation: 'Databricks/coverage.xml'
+              reportDirectory: 'Databricks/htmlcov'
+              failIfCoverageEmpty: true
+            condition: always()
+
+          # ----------------------------------------------------------------
+          # Publish Test Execution Report (pytest-html)
+          # ----------------------------------------------------------------
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Test Execution Report'
+            inputs:
+              PathtoPublish: '$(system.defaultworkingdirectory)/Databricks/test-report.html'
+              ArtifactName: 'test-execution-report'
+              publishLocation: 'Container'
+            condition: always()
+
+          # ----------------------------------------------------------------
+          # Publish Coverage JSON for Analysis
+          # ----------------------------------------------------------------
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Coverage JSON'
+            inputs:
+              PathtoPublish: '$(system.defaultworkingdirectory)/Databricks/coverage.json'
+              ArtifactName: 'coverage-json'
+              publishLocation: 'Container'
+            condition: always()
+
+          # ----------------------------------------------------------------
+          # Enforce Coverage Threshold
+          # ----------------------------------------------------------------
+          - task: Bash@3
+            displayName: 'Enforce Coverage Threshold'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                cd $(system.defaultworkingdirectory)/Databricks
+                
+                echo "=========================================="
+                echo "Coverage Threshold Validation"
+                echo "=========================================="
+                
+                if [ ! -f "coverage.xml" ]; then
+                  echo "[ERROR] coverage.xml not found"
+                  exit 1
+                fi
+                
+                COVERAGE=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); print(float(root.attrib['line-rate']) * 100)")
+                THRESHOLD=$(COVERAGE_THRESHOLD)
+                
+                echo "Current Coverage: ${COVERAGE}%"
+                echo "Required Threshold: ${THRESHOLD}%"
+                
+                if python -c "import sys; sys.exit(0 if float($COVERAGE) >= float($THRESHOLD) else 1)"; then
+                  echo "[PASSED] Coverage meets threshold"
+                else
+                  echo "[FAILED] Coverage below threshold"
+                  exit 1
+                fi
+            condition: always()
+
+          # ----------------------------------------------------------------
+          # Publish Databricks Bundles as Artifact
+          # ----------------------------------------------------------------
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish DAB Artifacts'
+            inputs:
+              PathtoPublish: '$(system.defaultworkingdirectory)/Databricks'
+              ArtifactName: 'drop'
+              publishLocation: 'Container'
+
+  # ==========================================================================
+  # STAGE 2: DEPLOY TO DEV
+  # ==========================================================================
+  - stage: Dev
+    displayName: 'Development'
+    pool:
+      name: 'Shared-EU-Container-Linux-Python-S-Test'
+    dependsOn: Build
+    condition: and(eq(variables['Build.SourceBranchName'], 'development'), succeeded('Build'))
+    variables:
+      - group: L-FEC-RADAR-DEV
+    jobs:
+      - job: DAB
+        displayName: 'Deploy All Bundles to Dev'
+        steps:
+          - template: artifacts/downloadartifacts.yml
+
+          # Token replacement for environment-specific configs
+          - task: qetza.replacetokens.replacetokens-task.replacetokens@6
+            displayName: 'Replace Tokens in Bundle Configs'
+            inputs:
+              root: '$(System.ArtifactsDirectory)/drop'
+              sources: '**/*.yml'
+              tokenPattern: 'custom'
+              tokenPrefix: '(('
+              tokenSuffix: '))'
+
+          # Deploy each bundle
+          - template: databricks/DAB_template.yml
+            parameters:
+              resourceGroupName: 'rg-wr-radar-dev'
+              DatabricksWorkspaceName: 'dbws-wr-radar-dev'
+              spn: 'reg-dev-global-wrkycif (SPN)'
+              DATABRICKS_HOST: 'https://adb-3634536606298227.7.azuredatabricks.net'
+              TARGET_ENV: 'dev'
+
+  # ==========================================================================
+  # STAGE 3: DEPLOY TO PREPROD
+  # ==========================================================================
+  - stage: Preprod
+    displayName: 'Preprod'
+    pool:
+      name: 'Shared-EU-Container-Linux-Python-S-Prod'
+    dependsOn: [Build, Dev]
+    condition: and(eq(variables['Build.SourceBranchName'], 'preprod'), succeeded('Build'))
+    variables:
+      - group: L-FEC-RADAR-PREPRD
+    jobs:
+      - job: DAB
+        displayName: 'Deploy All Bundles to Preprod'
+        steps:
+          - template: artifacts/downloadartifacts.yml
+
+          - task: qetza.replacetokens.replacetokens-task.replacetokens@6
+            displayName: 'Replace Tokens in Bundle Configs'
+            inputs:
+              root: '$(System.ArtifactsDirectory)/drop'
+              sources: '**/*.yml'
+              tokenPattern: 'custom'
+              tokenPrefix: '(('
+              tokenSuffix: '))'
+
+          - template: databricks/DAB_template.yml
+            parameters:
+              resourceGroupName: 'rg-wr-radar-preprd'
+              DatabricksWorkspaceName: 'dbws-wr-radar-preprd'
+              spn: 'reg-prd-global-wrkycif (SPN)'
+              DATABRICKS_HOST: 'https://adb-2475554465308574.14.azuredatabricks.net'
+              TARGET_ENV: 'preprod'
+
+  # ==========================================================================
+  # STAGE 4: DEPLOY TO PROD
+  # ==========================================================================
+  - stage: Prod
+    displayName: 'Production'
+    pool:
+      name: 'Shared-EU-Container-Linux-Python-S-Prod'
+    dependsOn: [Build, Dev, Preprod]
+    condition: and(eq(variables['Build.SourceBranchName'], 'main'), succeeded('Build'))
+    variables:
+      - group: L-FEC-RADAR-PROD
+    jobs:
+      - deployment: Databricks_deployment_on_prod
+        displayName: 'Deploy All Bundles to Production'
+        environment: E-FEC-RADAR-PROD
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: none
+
+                - template: changemanagement/changecreate.yml
+                - template: changemanagement/changeclose.yml
+                - template: artifacts/downloadartifacts.yml
+
+                - task: qetza.replacetokens.replacetokens-task.replacetokens@6
+                  displayName: 'Replace Tokens in Bundle Configs'
+                  inputs:
+                    root: '$(System.ArtifactsDirectory)/drop'
+                    sources: '**/*.yml'
+                    tokenPattern: 'custom'
+                    tokenPrefix: '(('
+                    tokenSuffix: '))'
+
+                - template: databricks/DAB_template.yml
+                  parameters:
+                    resourceGroupName: 'rg-wr-radar-prod'
+                    DatabricksWorkspaceName: 'dbws-wr-radar-prod'
+                    spn: 'reg-prd-global-wrkycif (SPN)'
+                    DATABRICKS_HOST: 'https://adb-2426369368647006.6.azuredatabricks.net'
+                    TARGET_ENV: 'prod'

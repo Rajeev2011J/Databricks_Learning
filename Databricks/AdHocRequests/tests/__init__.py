@@ -1,1 +1,0 @@
-# AdHocRequests bundle tests
