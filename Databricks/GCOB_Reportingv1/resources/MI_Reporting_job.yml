@@ -141,13 +141,6 @@ resources:
           notebook_task:
             notebook_path: ../src/SustainabilityQuestionAnswers.py
           existing_cluster_id: ${var.Radar_medium_UC_cluster_id}
-          libraries:
-            - whl: ${var.wheel_path[0]}
-            - whl: ${var.wheel_path[1]}
-            - whl: ${var.wheel_path[2]}
-            - whl: ${var.wheel_path[3]}
-            - whl: ${var.wheel_path[4]}
-            - whl: ${var.wheel_path[5]}
             
 
         - task_key: GCOB_MI_UC_RLS_N2K
@@ -172,13 +165,6 @@ resources:
           notebook_task:
             notebook_path: ../src/GCOB_MI_UC_RLS_N2K.py
           existing_cluster_id: ${var.Radar_medium_UC_cluster_id}
-          libraries:
-            - whl: ${var.wheel_path[0]}
-            - whl: ${var.wheel_path[1]}
-            - whl: ${var.wheel_path[2]}
-            - whl: ${var.wheel_path[3]}
-            - whl: ${var.wheel_path[4]}
-            - whl: ${var.wheel_path[5]}
 
 
         - task_key: MI_Report_Refresh
@@ -234,27 +220,274 @@ targets:
             on_failure:
               - ruud.van.laar@rabobank.com
               - fm.global.KYCReportingSupport@rabobank.com
+  # preprod:
+  #   default: true
+  #   resources:
+  #     jobs:
+  #       MI_Reporting_job:
+  #         name: MI_Reporting_job
+
+  #         permissions:
+  #           - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
+  #             level: CAN_VIEW
+
+  #           - group_name: eu.aut.AADFecRadarAnalyticsEngineerAdmin.us
+  #             level: CAN_VIEW
+
+  #           - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us
+  #             level: CAN_VIEW
+
+  #         schedule:
+  #           quartz_cron_expression: '0 30 7 * * ?'  # 09:00 AM
+  #           timezone_id: Europe/Amsterdam
+  #           pause_status: PAUSED
+
   preprod:
     default: true
     resources:
       jobs:
         MI_Reporting_job:
           name: MI_Reporting_job
+          job_clusters:
+            - job_cluster_key: medium_spot_cluster
+              new_cluster:
+                spark_version: 14.3.x-scala2.12
+                autoscale:
+                  min_workers: 2
+                  max_workers: 4
+                node_type_id: Standard_D16ads_v5
+                azure_attributes:
+                  first_on_demand: 1
+                  availability: SPOT_WITH_FALLBACK_AZURE
+                  spot_bid_max_price: -1
+                init_scripts:
+                  - workspace:
+                      destination: /live/clusters/files/clusters_library.sh
+                spark_env_vars:
+                  PYSPARK_PYTHON: ((PYSPARK_PYTHON_VALUE))
+                  APP_REG_APP_ID: ((APP_REG_APP_ID_VALUE))
+                  GDP_STORAGE_NAME: ((GDP_STORAGE_NAME_VALUE))
+                  TENANT_ID: ((TENANT_ID_VALUE))
+                  ENV: ((ENV_VALUE))
+                  DATAVERSE_URL: ((DATAVERSE_URL_VALUE))
+                  subscriptionId: ((subscriptionId_VALUE))
+                  resourceGroup_API: ((resourceGroup_API_VALUE))
+                  CosmosAccount: ((CosmosAccount_VALUE))
+                  GNS_STORAGE_ACCOUNT: ((GNS_STORAGE_ACCOUNT_VALUE))
+                  GNS_CONTAINER: ((GNS_CONTAINER_VALUE))
+                  GDP_SA_STORAGE_NAME: ((GDP_SA_STORAGE_NAME_VALUE))
+                  GDP_NA_STORAGE_NAME: ((GDP_NA_STORAGE_NAME_VALUE))
+                  SALZReadStorage: ((SALZReadStorage_VALUE))
+                  job_list: ((job_list_Value))
+                  AU_GDP_Defined_Storage_Account: ((AU_GDP_Defined_Storage_Account_VALUE))
+                  NEXUSCLOUD_USERNAME: ((NEXUSCLOUD_USERNAME_VALUE))
+                  NEXUSCLOUD_PASSWORD: ((NEXUSCLOUD_PASSWORD_VALUE))
+                  CATALOG: ((CATALOG_VALUE))
+                enable_elastic_disk: true
+                data_security_mode: NONE
+                runtime_engine: PHOTON
 
-          permissions:
-            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrTribe.us
-              level: CAN_VIEW
+          # - job_cluster_key: medium_spot_uc_cluster
+          #   new_cluster:
+          #     spark_version: 17.3.x-scala2.13
+          #     autoscale:
+          #       min_workers: 2
+          #       max_workers: 4
+          #     node_type_id: Standard_D16ads_v5
+          #     azure_attributes:
+          #       first_on_demand: 1
+          #       availability: SPOT_WITH_FALLBACK_AZURE
+          #       spot_bid_max_price: -1
+          #     spark_env_vars:
+          #       PYSPARK_PYTHON: ((PYSPARK_PYTHON_VALUE))
+          #       APP_REG_APP_ID: ((APP_REG_APP_ID_VALUE))
+          #       GDP_STORAGE_NAME: ((GDP_STORAGE_NAME_VALUE))
+          #       TENANT_ID: ((TENANT_ID_VALUE))
+          #       ENV: ((ENV_VALUE))
+          #       DATAVERSE_URL: ((DATAVERSE_URL_VALUE))
+          #       subscriptionId: ((subscriptionId_VALUE))
+          #       resourceGroup_API: ((resourceGroup_API_VALUE))
+          #       CosmosAccount: ((CosmosAccount_VALUE))
+          #       GNS_STORAGE_ACCOUNT: ((GNS_STORAGE_ACCOUNT_VALUE))
+          #       GNS_CONTAINER: ((GNS_CONTAINER_VALUE))
+          #       GDP_SA_STORAGE_NAME: ((GDP_SA_STORAGE_NAME_VALUE))
+          #       GDP_NA_STORAGE_NAME: ((GDP_NA_STORAGE_NAME_VALUE))
+          #       SALZReadStorage: ((SALZReadStorage_VALUE))
+          #       job_list: ((job_list_Value))
+          #       AU_GDP_Defined_Storage_Account: ((AU_GDP_Defined_Storage_Account_VALUE))
+          #       NEXUSCLOUD_USERNAME: ((NEXUSCLOUD_USERNAME_VALUE))
+          #       NEXUSCLOUD_PASSWORD: ((NEXUSCLOUD_PASSWORD_VALUE))
+          #       CATALOG: ((CATALOG_VALUE))
+          #     enable_elastic_disk: true
+          #     data_security_mode: SINGLE_USER
+          #     runtime_engine: PHOTON
 
-            - group_name: eu.aut.AADFecRadarAnalyticsEngineerAdmin.us
-              level: CAN_VIEW
+          tasks:
+            - task_key: AllRelationship
+              notebook_task:
+                notebook_path: ../src/AllRelationship.py
+              job_cluster_key: medium_spot_cluster
 
-            - group_name: eu.aut.AADFecRadarAnalyticsEngineerWrRegion.us
-              level: CAN_VIEW
+            - task_key: BusinessActivities
+              notebook_task:
+                notebook_path: ../src/BusinessActivities.py
+              job_cluster_key: medium_spot_cluster
+        
+            - task_key: CddRisk
+              notebook_task:
+                notebook_path: ../src/CddRisk.py
+              job_cluster_key: medium_spot_cluster
+        
+            - task_key: MI_LocalRequirements
+              notebook_task:
+                notebook_path: ../src/MI-LocalRequirements.py
+              job_cluster_key: medium_spot_cluster   
+
+            - task_key: MI_Cases_Product
+              depends_on:
+                - task_key: party_case_impacted_location
+              notebook_task:
+                notebook_path: ../src/MI-Cases-Product.py
+              job_cluster_key: medium_spot_cluster
+        
+            - task_key: party_case_impacted_location
+              notebook_task:
+                notebook_path: ../src/party_case_impacted_location.py
+              job_cluster_key: medium_spot_cluster    
+
+            - task_key: N2K_GCOB_AAD_UserDetails
+              notebook_task:
+                notebook_path: ../src/N2K_GCOB_AAD_UserDetails.py
+              job_cluster_key: medium_spot_cluster
+
+            - task_key: FI_Clients
+              depends_on:
+                - task_key: MI_LocalRequirements
+              notebook_task:
+                notebook_path: ../src/FI_Clients.py
+              job_cluster_key: medium_spot_cluster
+          
+            - task_key: Control_Measure
+              notebook_task:
+                notebook_path: ../src/Control_Measure.py
+              job_cluster_key: medium_spot_cluster
+
+            - task_key: Name_Screening
+              notebook_task:
+                notebook_path: ../src/NameScreening.py
+              job_cluster_key: medium_spot_cluster
+
+            - task_key: WI-Doc-FatcaCrs-CO-SysId
+              notebook_task:
+                notebook_path: ../src/WorkItem-Documents-FatcaCrs-ClientOwner-SystemIdentifier.py
+              job_cluster_key: medium_spot_cluster
+
+            - task_key: UBO_PEP
+              notebook_task:
+                notebook_path: ../src/UBO_PEP.py
+              job_cluster_key: medium_spot_cluster
+
+            - task_key: Structure_questionnaires
+              notebook_task:
+                notebook_path: ../src/Structure_questionnaires.py
+              job_cluster_key: medium_spot_cluster
+
+            - task_key: ClientTradeName
+              notebook_task:
+                notebook_path: ../src/ClientTradeName.py
+              job_cluster_key: medium_spot_cluster
+          
+            - task_key: ClinetOwnerSupportDelegate
+              notebook_task:
+                notebook_path: ../src/ClientOwnerSupport_Delegate.py
+              job_cluster_key: medium_spot_cluster
+
+            - task_key: MI_RiskDeviation
+              notebook_task:
+                notebook_path: ../src/MI-RiskDeviation.py
+              job_cluster_key: medium_spot_cluster
+
+            - task_key: Nominee_Bearer_Shareholding
+              notebook_task:
+                notebook_path: ../src/Nominee_Bearer_Shareholding.py
+              job_cluster_key: medium_spot_cluster
+
+            - task_key: SanctionCountryScreeningNAW
+              notebook_task:
+                notebook_path: ../src/SanctionCountryScreeningNAW.py
+              job_cluster_key: medium_spot_cluster
+
+            - task_key: Client_Relationship_Data_Document
+              notebook_task:
+                notebook_path: ../src/Client_Relationship_Data_Document.py
+              job_cluster_key: medium_spot_cluster
+
+            - task_key: LEC_RLE_RNP_RANZ
+              notebook_task:
+                notebook_path: "../src/LEC_RLE_RNP_RANZ.py"
+              job_cluster_key: medium_spot_cluster
+          
+            - task_key: ExpectedTransactionProfile
+              notebook_task:
+                notebook_path: "../src/ExpectedTransactionProfile(ETP).py"
+              job_cluster_key: medium_spot_cluster
+
+            - task_key: SustainabilityQuestionAnswers
+              notebook_task:
+                notebook_path: ../src/SustainabilityQuestionAnswers.py
+              job_cluster_key: medium_spot_cluster    
+
+            - task_key: GCOB_MI_UC_RLS_N2K
+              depends_on:
+                - task_key: AllRelationship
+                - task_key: BusinessActivities
+                - task_key: CddRisk
+                - task_key: MI_Cases_Product
+                - task_key: FI_Clients
+                - task_key: Control_Measure
+                - task_key: Name_Screening
+                - task_key: WI-Doc-FatcaCrs-CO-SysId
+                - task_key: UBO_PEP
+                - task_key: Structure_questionnaires
+                - task_key: ClientTradeName
+                - task_key: ClinetOwnerSupportDelegate
+                - task_key: MI_RiskDeviation
+                - task_key: SanctionCountryScreeningNAW
+                - task_key: LEC_RLE_RNP_RANZ
+                - task_key: ExpectedTransactionProfile  
+              notebook_task:
+                notebook_path: ../src/GCOB_MI_UC_RLS_N2K.py
+              job_cluster_key: medium_spot_cluster
+
+            - task_key: MI_Report_Refresh
+              depends_on:
+                - task_key: AllRelationship
+                - task_key: BusinessActivities
+                - task_key: CddRisk
+                - task_key: MI_Cases_Product
+                - task_key: FI_Clients
+                - task_key: Control_Measure
+                - task_key: Name_Screening
+                - task_key: WI-Doc-FatcaCrs-CO-SysId
+                - task_key: UBO_PEP
+                - task_key: Structure_questionnaires
+                - task_key: ClientTradeName
+                - task_key: ClinetOwnerSupportDelegate
+                - task_key: MI_RiskDeviation
+                - task_key: SanctionCountryScreeningNAW
+                - task_key: LEC_RLE_RNP_RANZ
+                - task_key: ExpectedTransactionProfile
+              notebook_task:
+               notebook_path: ../PowerBI_Refresh/MI_Report_Refresh.py
+              job_cluster_key: medium_spot_cluster
 
           schedule:
-            quartz_cron_expression: '0 30 7 * * ?'  # 09:00 AM
-            timezone_id: Europe/Amsterdam
-            pause_status: PAUSED
+             quartz_cron_expression: '0 30 7 * * ?'  # 09:00 AM
+             timezone_id: Europe/Amsterdam
+             pause_status: PAUSED
+            
+
+
   dev:
     default: true
     resources:

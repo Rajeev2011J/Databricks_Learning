@@ -1,1 +1,0 @@
-# PartyCatalog bundle tests

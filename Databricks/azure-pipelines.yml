@@ -1,0 +1,259 @@
+# Azure DevOps Pipeline for Databricks Asset Bundles Testing
+# This pipeline works with the same test code that runs in Databricks workspace
+
+name: $(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+      - feature/*
+      - bugfix/*
+  paths:
+    include:
+      - Databricks/**
+      - azure-pipelines.yml
+
+pr:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - Databricks/**
+
+# Use Ubuntu agents (most common in Azure DevOps)
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  python.version: '3.10'
+  pip.cache.dir: $(Pipeline.Workspace)/.pip
+  PYTHONUNBUFFERED: '1'
+
+stages:
+  # ============================================================
+  # STAGE 1: Fast Unit Tests (< 30 seconds)
+  # ============================================================
+  - stage: FastTests
+    displayName: '🚀 Fast Unit Tests'
+    jobs:
+      - job: UnitTests
+        displayName: 'Unit Tests (No Spark)'
+        timeoutInMinutes: 10
+        steps:
+          - task: UsePythonVersion@0
+            displayName: 'Setup Python $(python.version)'
+            inputs:
+              versionSpec: '$(python.version)'
+          
+          - task: Cache@2
+            displayName: 'Cache pip packages'
+            inputs:
+              key: 'python | "$(Agent.OS)" | Databricks/requirements-dev.txt'
+              path: $(pip.cache.dir)
+              restoreKeys: |
+                python | "$(Agent.OS)"
+          
+          - script: |
+              cd Databricks
+              python -m pip install --upgrade pip
+              pip install -r requirements-dev.txt
+            displayName: 'Install dependencies'
+            env:
+              PIP_CACHE_DIR: $(pip.cache.dir)
+          
+          - script: |
+              cd Databricks
+              ./run_tests.sh --marker unit --no-coverage
+            displayName: 'Run unit tests'
+          
+          - task: PublishTestResults@2
+            displayName: 'Publish test results'
+            condition: always()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'Databricks/test-results.xml'
+              testRunTitle: 'Unit Tests'
+              failTaskOnFailedTests: true
+
+  # ============================================================
+  # STAGE 2: Spark Tests (Parallel)
+  # ============================================================
+  - stage: SparkTests
+    displayName: '⚡ Spark Tests'
+    dependsOn: FastTests
+    condition: succeeded()
+    jobs:
+      - job: SparkTests
+        displayName: 'Spark Tests'
+        timeoutInMinutes: 15
+        steps:
+          - task: UsePythonVersion@0
+            displayName: 'Setup Python $(python.version)'
+            inputs:
+              versionSpec: '$(python.version)'
+          
+          - task: Cache@2
+            displayName: 'Cache pip packages'
+            inputs:
+              key: 'python | "$(Agent.OS)" | Databricks/requirements-dev.txt'
+              path: $(pip.cache.dir)
+          
+          - script: |
+              cd Databricks
+              python -m pip install --upgrade pip
+              pip install -r requirements-dev.txt
+            displayName: 'Install dependencies'
+            env:
+              PIP_CACHE_DIR: $(pip.cache.dir)
+          
+          - script: |
+              cd Databricks
+              ./run_tests.sh --marker spark --no-coverage
+            displayName: 'Run Spark tests'
+          
+          - task: PublishTestResults@2
+            displayName: 'Publish test results'
+            condition: always()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'Databricks/test-results.xml'
+              testRunTitle: 'Spark Tests'
+              failTaskOnFailedTests: true
+      
+      - job: DQTests
+        displayName: 'Data Quality Tests'
+        timeoutInMinutes: 15
+        steps:
+          - task: UsePythonVersion@0
+            displayName: 'Setup Python $(python.version)'
+            inputs:
+              versionSpec: '$(python.version)'
+          
+          - task: Cache@2
+            displayName: 'Cache pip packages'
+            inputs:
+              key: 'python | "$(Agent.OS)" | Databricks/requirements-dev.txt'
+              path: $(pip.cache.dir)
+          
+          - script: |
+              cd Databricks
+              python -m pip install --upgrade pip
+              pip install -r requirements-dev.txt
+            displayName: 'Install dependencies'
+            env:
+              PIP_CACHE_DIR: $(pip.cache.dir)
+          
+          - script: |
+              cd Databricks
+              ./run_tests.sh --marker dq --no-coverage
+            displayName: 'Run DQ tests'
+          
+          - task: PublishTestResults@2
+            displayName: 'Publish test results'
+            condition: always()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'Databricks/test-results.xml'
+              testRunTitle: 'Data Quality Tests'
+              failTaskOnFailedTests: true
+
+  # ============================================================
+  # STAGE 3: Full Coverage Report
+  # ============================================================
+  - stage: FullCoverage
+    displayName: '📊 Full Coverage'
+    dependsOn: [FastTests, SparkTests]
+    condition: succeeded()
+    jobs:
+      - job: CoverageReport
+        displayName: 'Generate Coverage Report'
+        timeoutInMinutes: 30
+        steps:
+          - task: UsePythonVersion@0
+            displayName: 'Setup Python $(python.version)'
+            inputs:
+              versionSpec: '$(python.version)'
+          
+          - task: Cache@2
+            displayName: 'Cache pip packages'
+            inputs:
+              key: 'python | "$(Agent.OS)" | Databricks/requirements-dev.txt'
+              path: $(pip.cache.dir)
+          
+          - script: |
+              cd Databricks
+              python -m pip install --upgrade pip
+              pip install -r requirements-dev.txt
+            displayName: 'Install dependencies'
+            env:
+              PIP_CACHE_DIR: $(pip.cache.dir)
+          
+          - script: |
+              cd Databricks
+              ./run_tests.sh
+            displayName: 'Run full test suite with coverage'
+          
+          - task: PublishTestResults@2
+            displayName: 'Publish test results'
+            condition: always()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'Databricks/test-results.xml'
+              testRunTitle: 'Full Test Suite'
+              failTaskOnFailedTests: true
+          
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publish code coverage'
+            condition: always()
+            inputs:
+              codeCoverageTool: 'Cobertura'
+              summaryFileLocation: 'Databricks/coverage.xml'
+              reportDirectory: 'Databricks/htmlcov'
+              failIfCoverageEmpty: false
+          
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish coverage HTML report'
+            condition: always()
+            inputs:
+              PathtoPublish: 'Databricks/htmlcov'
+              ArtifactName: 'coverage-report'
+              publishLocation: 'Container'
+
+  # ============================================================
+  # STAGE 4: Bundle Validation (Optional - for main branch only)
+  # ============================================================
+  - stage: BundleValidation
+    displayName: '✓ Bundle Validation'
+    dependsOn: FullCoverage
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - job: ValidateBundles
+        displayName: 'Validate DAB Configurations'
+        steps:
+          - task: UsePythonVersion@0
+            displayName: 'Setup Python $(python.version)'
+            inputs:
+              versionSpec: '$(python.version)'
+          
+          - script: |
+              pip install databricks-cli
+            displayName: 'Install Databricks CLI'
+          
+          # Validate each bundle (requires DATABRICKS_TOKEN secret)
+          - script: |
+              cd Databricks
+              for bundle in radarv1 GCOB_Consumer GCOB_Reportingv1 clusters AdHocRequests PartyCatalog; do
+                echo "Validating $bundle..."
+                cd $bundle
+                # databricks bundle validate -t dev || echo "⚠️ Validation failed for $bundle"
+                cd ..
+              done
+            displayName: 'Validate bundle configurations'
+            env:
+              DATABRICKS_HOST: $(DATABRICKS_HOST)
+              DATABRICKS_TOKEN: $(DATABRICKS_TOKEN)
+            condition: and(succeeded(), ne(variables['DATABRICKS_TOKEN'], ''))

@@ -1,0 +1,781 @@
+
+trigger:
+  branches:
+    include:
+      - development
+      - preprod
+      - main
+  paths:
+    include:
+      - Databricks/*
+    exclude:
+      - DevOpsPipelines/*
+
+resources:
+  repositories:
+    - repository: self
+      type: git
+      name: WR_Financing_Journey_Tribe_and_Service_Centre/R-FEC-RADAR
+    - repository: templates
+      type: git
+      name: WR_Financing_Journey_Tribe_and_Service_Centre/R-FEC-RADAR-pipelines-template
+      ref: refs/heads/main
+      
+pool:
+  name: 'Shared-EU-Container-Linux-Python-S-Prod'
+  
+variables:
+ - group: L-FEC-RADAR
+ - group: NexusCloud_eu.NpaRadarNexusUser@rabobank.com
+ 
+ - name: NEXUSCLOUD_GROUP_REPO
+   value: gr-pypi-174
+ 
+ - name: NEXUSCLOUD_PYPI_URL
+   value: https://$(NEXUSCLOUD_USERNAME):$(NEXUSCLOUD_PASSWORD)@internal.euprodnexuscloud1.aws.rabonet.com/repository/$(NEXUSCLOUD_GROUP_REPO)/simple 
+ 
+ - name: COVERAGE_THRESHOLD
+   value: 80
+
+stages:
+  - stage: Build
+
+    displayName: 'Continuous Integrations'
+    jobs:
+      - template: compliancyscans/secretscan.yml
+          
+      - job: 'CI'
+        displayName: 'Continuous Integration'
+        steps:
+          - template: compliancyscans/sonarqube.yml@templates
+            parameters:
+              sonarCubeProjectName: RADAR-Consumer
+
+          - template: compliancyscans/checkmarx.yml
+
+          # ---------------------------------------------------------------
+          # CRITICAL: Install Java for PySpark
+          # PySpark requires Java Runtime Environment (JRE) to initialize SparkContext
+          # Without this, tests fail with "'NoneType' object has no attribute 'sc'"
+          # ---------------------------------------------------------------
+          - task: JavaToolInstaller@0
+            displayName: 'Install Java 17 for PySpark'
+            inputs:
+              versionSpec: '17'
+              jdkArchitectureOption: 'x64'
+              jdkSourceOption: 'PreInstalled'
+
+          - task: Bash@3
+            displayName: 'Validate Java Installation'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                
+                echo "=========================================="
+                echo "Java Version Validation"
+                echo "=========================================="
+                
+                java -version
+                echo ""
+                echo "JAVA_HOME: $JAVA_HOME"
+                echo ""
+                
+                if ! command -v java &> /dev/null; then
+                  echo "[ERROR] Java is not available in PATH"
+                  echo "PySpark tests will fail with 'NoneType' errors"
+                  exit 1
+                fi
+                
+                echo "[PASS] Java is available and ready for PySpark"
+                echo ""
+
+          # ---------------------------------------------------------------
+          # CRITICAL FIX: Pin Python 3.11 EXACTLY (not 3.12+)
+          # Python 3.12+ causes cloudpickle serialization issues with PySpark 3.5.5
+          # Python 3.14 was being used - this forces exactly 3.11.x
+          # ---------------------------------------------------------------
+          - task: UsePythonVersion@0
+            displayName: 'Install Python 3.11.x (STRICT)'
+            inputs:
+              versionSpec: '3.11.x'  # STRICT: Only 3.11.0-3.11.99, rejects 3.12+
+              addToPath: true
+              architecture: 'x64'
+
+          # ---------------------------------------------------------------
+          # CRITICAL VALIDATION: Ensure Python 3.11 is actually active
+          # Fails fast if wrong version, preventing confusing errors later
+          # ---------------------------------------------------------------
+          - task: Bash@3
+            displayName: 'Validate Python 3.11 is Active'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                
+                echo "=========================================="
+                echo "Python Version Validation"
+                echo "=========================================="
+                
+                PYTHON_VERSION=$(python --version 2>&1 | awk '{print $2}')
+                echo "Active Python version: $PYTHON_VERSION"
+                
+                # Extract major.minor version (e.g., "3.11" from "3.11.5")
+                PYTHON_MAJOR_MINOR=$(echo $PYTHON_VERSION | cut -d. -f1,2)
+                
+                if [ "$PYTHON_MAJOR_MINOR" != "3.11" ]; then
+                  echo ""
+                  echo "[ERROR] Python 3.11 is required, but $PYTHON_VERSION is active"
+                  echo ""
+                  echo "This will cause cloudpickle serialization errors with PySpark 3.5.5"
+                  echo "Azure agent must have Python 3.11.x installed"
+                  echo ""
+                  echo "Available Python versions on this agent:"
+                  ls -la /opt/hostedtoolcache/Python/ || echo "No hostedtoolcache found"
+                  exit 1
+                fi
+                
+                echo "[PASS] Python 3.11 is active (version: $PYTHON_VERSION)"
+                echo "[PASS] Compatible with PySpark 3.5.5"
+                echo ""
+
+          # ---------------------------------------------------------------
+          # DIAGNOSTIC: Verify conftest.py exists in repository
+          # This checks if the conftest.py fixture file is present and
+          # will be loaded by pytest. Absence of this file explains why
+          # tests fail with 'NoneType' SparkContext errors.
+          # ---------------------------------------------------------------
+          - task: Bash@3
+            displayName: 'Verify conftest.py Deployment'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                
+                echo "=========================================="
+                echo "CONFTEST.PY DEPLOYMENT VERIFICATION"
+                echo "=========================================="
+                
+                # Expected path based on test logs
+                EXPECTED_PATH="Databricks/radarv1/tests/conftest.py"
+                
+                echo "Working directory: $(pwd)"
+                echo ""
+                
+                # Check if conftest.py exists at expected location
+                if [ -f "$EXPECTED_PATH" ]; then
+                  echo "✅ conftest.py FOUND at $EXPECTED_PATH"
+                  echo ""
+                  echo "File size: $(wc -c < $EXPECTED_PATH) bytes"
+                  echo "Line count: $(wc -l < $EXPECTED_PATH) lines"
+                  echo "MD5 checksum: $(md5sum $EXPECTED_PATH | cut -d' ' -f1)"
+                  echo ""
+                  echo "First 30 lines of conftest.py:"
+                  echo "----------------------------------------"
+                  head -30 "$EXPECTED_PATH"
+                  echo "----------------------------------------"
+                  echo ""
+                  echo "✅ conftest.py is deployed and will be loaded by pytest"
+                else
+                  echo "❌ conftest.py NOT FOUND at $EXPECTED_PATH"
+                  echo ""
+                  echo "THIS IS THE PROBLEM - pytest cannot load the fixture!"
+                  echo "Without this file, SparkSession fixture is unavailable."
+                  echo "Tests will fail with 'NoneType' object has no attribute 'sc'"
+                  echo ""
+                  echo "The file must exist in your Azure DevOps repository at:"
+                  echo "  $EXPECTED_PATH"
+                  echo ""
+                fi
+                
+                echo "Searching for ALL conftest.py files in repository:"
+                find . -name "conftest.py" -type f 2>/dev/null || echo "No conftest.py files found anywhere"
+                
+                echo ""
+                echo "Tests directory contents:"
+                if [ -d "Databricks/radarv1/tests" ]; then
+                  echo "Directory exists: Databricks/radarv1/tests"
+                  ls -la Databricks/radarv1/tests/
+                else
+                  echo "❌ Databricks/radarv1/tests directory does not exist!"
+                fi
+                
+                echo ""
+                echo "Pytest conftest discovery test:"
+                cd Databricks/radarv1 && python -m pytest --collect-only --quiet tests/ 2>&1 | head -40
+                
+                echo ""
+                echo "=========================================="
+                echo "Diagnostic Complete"
+                echo "=========================================="
+
+          # ---------------------------------------------------------------
+          # Cache pytest dependencies for faster builds
+          # ---------------------------------------------------------------
+          - task: Cache@2
+            displayName: 'Cache Pytest Dependencies'
+            inputs:
+              key: 'pytest-py311 | "$(Agent.OS)" | "8.3.5-3.5.5-6.0.0-3.2.0"'
+              path: '$(Pipeline.Workspace)/.pip'
+              cacheHitVar: 'PYTEST_CACHE_RESTORED'
+
+          # ---------------------------------------------------------------
+          # Unit Tests — radarv1 POC pytest suite
+          # Uses local[2] SparkSession (no DatabricksSession or cluster).
+          # CI=true ensures conftest.py spark fixture uses local Spark mode.
+          # Fails the build if any test fails, blocking deployment.
+          # Collects code coverage and enforces quality gates.
+          # ENHANCED: Now generates pytest-html report with test details
+          # BANK POLICY: All packages MUST come from internal Nexus only
+          # COVERAGE: Includes src/radarv1 + ONLY RadarUtils.py (excludes other prod notebooks)
+          # ---------------------------------------------------------------
+
+          # ---------------------------------------------------------------
+          # Clear stale coverage files to prevent threshold check failures
+          # Old coverage.xml from previous runs can cause false failures
+          # ---------------------------------------------------------------
+          - task: Bash@3
+            displayName: 'Clear Stale Coverage Files'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                cd $(system.defaultworkingdirectory)/Databricks/radarv1
+                
+                echo "=========================================="
+                echo "Clearing Stale Coverage Files"
+                echo "=========================================="
+                
+                # Remove old coverage files to prevent stale data
+                rm -f .coverage coverage.xml coverage.json
+                rm -rf htmlcov/
+                
+                echo "[DONE] Coverage files cleared"
+                echo "Fresh coverage data will be generated by pytest"
+                echo ""
+
+          - task: Bash@3
+            displayName: 'Run radarv1 Unit Tests with Deep-Level Reporting'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                
+                echo "=========================================="
+                echo "Python Version Check"
+                echo "=========================================="
+                python --version
+                python3 --version || true
+                echo ""
+                
+                echo "=========================================="
+                echo "Installing radarv1 test dependencies"
+                echo "=========================================="
+                
+                # Upgrade pip first
+                python -m pip install --upgrade pip
+                
+                echo ""
+                echo "Installing from internal NexusCloud repository..."
+                echo "Repository: $(NEXUSCLOUD_PYPI_URL)"
+                echo ""
+                
+                # Install dependencies from internal Nexus (REQUIRED by bank policy)
+                # All packages MUST come from internal Nexus - no public PyPI fallback allowed
+                # FIXED: pytest-html==3.2.0 (3.2.1 doesn't exist in Nexus)
+                pip install --cache-dir=$(Pipeline.Workspace)/.pip \
+                  pytest==8.3.5 \
+                  pyspark==3.5.5 \
+                  pytest-cov==6.0.0 \
+                  pytest-html==3.2.0 \
+                  pytest-metadata==3.0.0 \
+                  --index-url $(NEXUSCLOUD_PYPI_URL) \
+                  --timeout 30
+                
+                echo ""
+                echo "[PASS] Successfully installed from internal Nexus"
+                echo ""
+                echo "=========================================="
+                echo "Installed Package Versions"
+                echo "=========================================="
+                pip list | grep -E "(pytest|pyspark)"
+                
+                echo ""
+                echo "=========================================="
+                echo "Validating test environment"
+                echo "=========================================="
+                
+                # Navigate to project directory
+                cd $(system.defaultworkingdirectory)/Databricks/radarv1
+                
+                # ---------------------------------------------------------------
+                # RADAR UTILS IMPORT SETUP
+                # Inject fake databricks.sdk.runtime so RadarUtils.py loads
+                # without a live Databricks cluster during CI.
+                # Also set required module-level env vars.
+                # ---------------------------------------------------------------
+                export APP_REG_APP_ID="test-app-id"
+                export TENANT_ID="test-tenant-id"
+                export ENV="dev"
+                
+                # Validate project structure
+                if [ ! -d "tests" ]; then
+                  echo "ERROR: tests/ directory not found in $(pwd)"
+                  echo "Available directories:"
+                  ls -la
+                  exit 1
+                fi
+                
+                # CRITICAL: Validate pytest.ini exists and has required pythonpath setting
+                if [ ! -f "pytest.ini" ]; then
+                  echo "ERROR: pytest.ini not found - REQUIRED for src-layout imports"
+                  echo "The file must contain: pythonpath = src"
+                  exit 1
+                fi
+                
+                # Validate pytest.ini has the critical pythonpath = src setting
+                if ! grep -q "pythonpath = src" pytest.ini; then
+                  echo "ERROR: pytest.ini missing 'pythonpath = src' configuration"
+                  echo "Without this, imports like 'from radarv1.main import get_taxis' will fail"
+                  echo ""
+                  echo "Current pytest.ini content:"
+                  cat pytest.ini
+                  exit 1
+                fi
+                
+                echo "[PASS] pytest.ini validated (pythonpath = src)"
+                
+                if [ ! -f "tests/__init__.py" ]; then
+                  echo "ERROR: tests/__init__.py missing - required for package discovery"
+                  exit 1
+                fi
+                
+                echo "[PASS] tests/__init__.py found"
+
+                # ---------------------------------------------------------------
+                # RADAR UTILS: RadarUtils.py is now part of src/radarv1 package
+                # No PYTHONPATH manipulation needed - pytest.ini handles it
+                # ---------------------------------------------------------------
+                
+                # Validate test_radar_utils.py exists
+                if [ -f "tests/test_radar_utils.py" ]; then
+                  echo "[PASS] test_radar_utils.py found"
+                else
+                  echo "[WARN] test_radar_utils.py not found - RadarUtils tests will be skipped"
+                fi
+                
+                # Check for .coveragerc configuration file
+                if [ -f ".coveragerc" ]; then
+                  echo "[PASS] .coveragerc found - enhanced reporting enabled"
+                  echo ""
+                  echo "Enhanced Features:"
+                  echo "  - Test context tracking (which test covers which line)"
+                  echo "  - Custom HTML title and styling"
+                  echo "  - JSON report for detailed analysis"
+                  echo "  - Configurable exclusions and pragmas"
+                  echo ""
+                else
+                  echo "[WARN] .coveragerc not found - using default coverage settings"
+                fi
+                
+                echo "Found tests directory: $(pwd)/tests"
+                TEST_COUNT=$(find tests -name 'test_*.py' -o -name '*_test.py' | wc -l)
+                echo "Test files discovered: $TEST_COUNT"
+                
+                if [ "$TEST_COUNT" -eq 0 ]; then
+                  echo "ERROR: No test files found matching test_*.py or *_test.py"
+                  echo "Listing tests/ contents:"
+                  ls -la tests/
+                  exit 1
+                fi
+                
+                echo ""
+                echo "=========================================="
+                echo "DIAGNOSTIC: Check test_radar_utils.py Discovery"
+                echo "=========================================="
+                
+                # Check if test_radar_utils.py exists
+                if [ -f "tests/test_radar_utils.py" ]; then
+                  echo "✅ test_radar_utils.py EXISTS"
+                  echo "File size: $(wc -c < tests/test_radar_utils.py) bytes"
+                  echo ""
+                else
+                  echo "❌ test_radar_utils.py DOES NOT EXIST"
+                  echo "This explains why RadarUtils.py isn't in coverage!"
+                  echo ""
+                fi
+                
+                # Try to collect ONLY test_radar_utils.py tests
+                echo "Attempting to collect test_radar_utils.py tests..."
+                echo "(This will show import errors or skip reasons)"
+                echo ""
+                
+                export CI=true
+                pytest tests/test_radar_utils.py --collect-only -v 2>&1 || echo "Collection failed - see errors above"
+                
+                echo ""
+                echo "=========================================="
+                echo "Running radarv1 Unit Tests with Deep-Level Reporting"
+                echo "=========================================="
+                
+                # Set CI=true to ensure conftest.py spark fixture uses local Spark
+                export CI=true
+                
+                # Run pytest with ENHANCED coverage + test reporting
+                # Coverage source:
+                #   --cov=src/radarv1  : ALL modules in src/radarv1 (main, customer_data, gdp, RadarUtils)
+                # RadarUtils.py is now part of the radarv1 package - one --cov covers everything
+                # CRITICAL: Add -s flag to show conftest.py fixture output
+                # This lets us see the "CI/CD detected", "Step 1..4" diagnostics
+                pytest tests/ \
+                  --junitxml=test-results.xml \
+                  --html=test-report.html \
+                  --self-contained-html \
+                  --cov=src/radarv1 \
+                  --cov-config=.coveragerc \
+                  --cov-report=xml:coverage.xml \
+                  --cov-report=html:htmlcov \
+                  --cov-report=json:coverage.json \
+                  --cov-report=term \
+                  --cov-report=term-missing \
+                  --cov-context=test \
+                  --tb=short \
+                  --durations=10 \
+                  -v \
+                  -s
+                
+                echo ""
+                echo "=========================================="
+                echo "Coverage Summary"
+                echo "=========================================="
+                
+                # Display coverage summary from the XML file using Python
+                python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); line_rate = float(root.attrib['line-rate']) * 100; branch_rate = float(root.attrib.get('branch-rate', 0)) * 100; print(f'Line Coverage:   {line_rate:.2f}%'); print(f'Branch Coverage: {branch_rate:.2f}%'); print(''); print('Per-file Coverage (src/radarv1):'); print('-' * 60); [print(f'  {pkg.attrib[\"filename\"].replace(\"src/radarv1/\", \"\"):<40} {float(pkg.attrib[\"line-rate\"]) * 100:>6.2f}%') for pkg in root.findall('.//class')]"
+                
+                echo ""
+                echo "=========================================="
+                echo "Test Execution Summary"
+                echo "=========================================="
+                
+                # FIXED: Use heredoc syntax for multi-line Python code
+                # This properly handles newlines in Azure DevOps pipelines
+                python <<'EOF'
+                import xml.etree.ElementTree as ET
+                tree = ET.parse('test-results.xml')
+                root = tree.getroot()
+                
+                total_tests = int(root.attrib.get('tests', 0))
+                failures = int(root.attrib.get('failures', 0))
+                errors = int(root.attrib.get('errors', 0))
+                skipped = int(root.attrib.get('skipped', 0))
+                time = float(root.attrib.get('time', 0))
+                
+                passed = total_tests - failures - errors - skipped
+                
+                print(f'Total Tests:     {total_tests}')
+                print(f'Passed:          {passed}')
+                print(f'Failed:          {failures}')
+                print(f'Errors:          {errors}')
+                print(f'Skipped:         {skipped}')
+                print(f'Duration:        {time:.2f}s')
+                print(f'Success Rate:    {(passed/total_tests*100) if total_tests > 0 else 0:.1f}%')
+                EOF
+                
+                echo ""
+                echo "=========================================="
+                echo "Reports Generated"
+                echo "=========================================="
+                echo ""
+                echo "TEST EXECUTION REPORT (NEW)"
+                echo "   File: test-report.html"
+                echo "   Features:"
+                echo "   - Test pass/fail/skip summary"
+                echo "   - Duration for each test"
+                echo "   - 10 slowest tests highlighted"
+                echo "   - Full test output and logs"
+                echo "   - Stack traces for failures"
+                echo "   - System environment details"
+                echo "   - Self-contained (CSS/JS embedded)"
+                echo ""
+                echo "COVERAGE REPORTS"
+                echo "   HTML:  htmlcov/index.html"
+                echo "   - Interactive file browser"
+                echo "   - Line-by-line coverage highlighting"
+                echo "   - Test context (which test covers each line)"
+                echo "   - Branch coverage visualization"
+                echo ""
+                echo "   XML:   coverage.xml (Cobertura)"
+                echo "   - For Azure DevOps integration"
+                echo "   - Branch and line coverage metrics"
+                echo ""
+                echo "   JSON:  coverage.json"
+                echo "   - Detailed programmatic access"
+                echo "   - Per-file, per-function, per-line metrics"
+                echo "   - Test context mapping"
+                echo ""
+                echo "=========================================="
+                echo "Tests completed successfully"
+                echo "=========================================="
+
+          - task: Bash@3
+            displayName: 'Diagnostic: Check RadarUtils Coverage'
+            inputs:
+              targetType: 'inline'
+              script: |
+                cd $(system.defaultworkingdirectory)/Databricks/radarv1
+                
+                echo "=========================================="
+                echo "Test Results Summary"
+                echo "=========================================="
+                python <<'EOF'
+                import xml.etree.ElementTree as ET
+                
+                # Check test results
+                tree = ET.parse('test-results.xml')
+                root = tree.getroot()
+                
+                print(f"Total tests: {root.attrib.get('tests', 0)}")
+                print(f"Failures: {root.attrib.get('failures', 0)}")
+                print(f"Errors: {root.attrib.get('errors', 0)}")
+                print(f"Skipped: {root.attrib.get('skipped', 0)}")
+                print("")
+                
+                # Check if test_radar_utils tests ran
+                radar_tests = [tc for tc in root.findall('.//testcase') if 'test_radar_utils' in tc.attrib.get('file', '')]
+                print(f"test_radar_utils.py tests found: {len(radar_tests)}")
+                
+                if radar_tests:
+                    print("\ntest_radar_utils.py test results:")
+                    for tc in radar_tests[:5]:  # Show first 5
+                        status = "PASS"
+                        if tc.find('failure') is not None:
+                            status = "FAIL"
+                        elif tc.find('error') is not None:
+                            status = "ERROR"
+                        elif tc.find('skipped') is not None:
+                            status = "SKIP"
+                        print(f"  {tc.attrib.get('name', 'unknown')}: {status}")
+                EOF
+                
+                echo ""
+                echo "=========================================="
+                echo "Coverage Files Measured"
+                echo "=========================================="
+                python <<'EOF'
+                import xml.etree.ElementTree as ET
+                
+                tree = ET.parse('coverage.xml')
+                root = tree.getroot()
+                
+                files = root.findall('.//class')
+                print(f"Total files in coverage: {len(files)}")
+                print("")
+                print("Files measured:")
+                for f in files:
+                    filename = f.attrib.get('filename', '')
+                    print(f"  - {filename}")
+                
+                # Check specifically for RadarUtils
+                radar_found = any('RadarUtils' in f.attrib.get('filename', '') for f in files)
+                print(f"\nRadarUtils.py found: {'YES' if radar_found else 'NO'}")
+                EOF
+            condition: always()
+
+          - task: PublishTestResults@2
+            displayName: 'Publish radarv1 Test Results'
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'Databricks/radarv1/test-results.xml'
+              testRunTitle: 'radarv1 Unit Tests'
+              failTaskOnFailedTests: true
+            condition: always()
+
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publish Code Coverage Report'
+            inputs:
+              codeCoverageTool: 'Cobertura'
+              summaryFileLocation: 'Databricks/radarv1/coverage.xml'
+              reportDirectory: 'Databricks/radarv1/htmlcov'
+              failIfCoverageEmpty: true
+            condition: always()
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Test Execution Report (pytest-html)'
+            inputs:
+              PathtoPublish: '$(system.defaultworkingdirectory)/Databricks/radarv1/test-report.html'
+              ArtifactName: 'test-execution-report'
+              publishLocation: 'Container'
+            condition: always()
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Coverage JSON Report'
+            inputs:
+              PathtoPublish: '$(system.defaultworkingdirectory)/Databricks/radarv1/coverage.json'
+              ArtifactName: 'coverage-json'
+              publishLocation: 'Container'
+            condition: always()
+
+          - task: Bash@3
+            displayName: 'Enforce Coverage Threshold'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                cd $(system.defaultworkingdirectory)/Databricks/radarv1
+                
+                echo "=========================================="
+                echo "Coverage Threshold Validation"
+                echo "=========================================="
+                
+                # Validate coverage.xml exists
+                if [ ! -f "coverage.xml" ]; then
+                  echo "ERROR: coverage.xml not found"
+                  exit 1
+                fi
+                
+                # Use python (from UsePythonVersion task)
+                PYTHON_CMD="python"
+                
+                echo "Using Python: $PYTHON_CMD"
+                $PYTHON_CMD --version
+                
+                # Extract coverage percentage from coverage.xml
+                COVERAGE=$($PYTHON_CMD -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); print(float(root.attrib['line-rate']) * 100)")
+                THRESHOLD=$(COVERAGE_THRESHOLD)
+                
+                echo "Current Coverage: ${COVERAGE}%"
+                echo "Required Threshold: ${THRESHOLD}%"
+                echo ""
+                
+                # Compare coverage with threshold using Python
+                if $PYTHON_CMD -c "import sys; sys.exit(0 if float($COVERAGE) >= float($THRESHOLD) else 1)"; then
+                  echo "[PASSED] Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%"
+                  echo "=========================================="
+                else
+                  echo "[FAILED] Coverage ${COVERAGE}% is below threshold ${THRESHOLD}%"
+                  echo "=========================================="
+                  exit 1
+                fi
+            condition: always()
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: '$(system.defaultworkingdirectory)/Databricks'
+              ArtifactName: 'drop'
+              publishLocation: 'Container'
+            displayName: 'publishing DAB as artifact'        
+           
+
+  - stage: Dev
+    displayName: 'Development'
+    pool:
+      name: 'Shared-EU-Container-Linux-Python-S-Test'
+    dependsOn: 
+      - Build
+    variables:
+      - group: L-FEC-RADAR-DEV
+    condition: and(eq(variables['Build.SourceBranchName'], 'development'),succeeded('Build'))
+    jobs:
+      - job: DAB
+        steps:
+          - template: artifacts/downloadartifacts.yml
+
+          - task: qetza.replacetokens.replacetokens-task.replacetokens@6
+            inputs:
+              root: '$(System.ArtifactsDirectory)/drop/clusters/resources'
+              sources: '*.yml'
+              tokenPattern: 'custom'
+              tokenPrefix: '(('
+              tokenSuffix: '))'
+
+          - task: Bash@3
+            inputs:
+              targetType: 'inline'
+              script: |
+                # Write your commands here
+                
+                cat $(System.ArtifactsDirectory)/drop/clusters/resources/clusters_job.yml
+
+          - template: databricks/DAB_template.yml
+            parameters: 
+              resourceGroupName:        'rg-wr-radar-dev'
+              DatabricksWorkspaceName:  'dbws-wr-radar-dev'
+              spn:                      'reg-dev-global-wrkycif (SPN)'
+              DATABRICKS_HOST:          'https://adb-3634536606298227.7.azuredatabricks.net'
+              TARGET_ENV:               'dev'
+
+  - stage: Preprod
+    displayName: 'Preprod'
+    pool:
+      name: 'Shared-EU-Container-Linux-Python-S-Prod'
+    dependsOn: 
+      - Build
+      - Dev
+    variables:
+      - group: L-FEC-RADAR-PREPRD
+    condition: and(eq(variables['Build.SourceBranchName'], 'preprod'),succeeded('Build'))
+    jobs:
+      - job: DAB
+        steps:
+          - template: artifacts/downloadartifacts.yml
+
+          - task: qetza.replacetokens.replacetokens-task.replacetokens@6
+            inputs:
+              root: '$(System.ArtifactsDirectory)/drop/clusters/resources'
+              sources: '*.yml'
+              tokenPattern: 'custom'
+              tokenPrefix: '(('
+              tokenSuffix: '))'
+
+          - template: databricks/DAB_template.yml
+            parameters: 
+              resourceGroupName:          'rg-wr-radar-preprd'
+              DatabricksWorkspaceName:    'dbws-wr-radar-preprd'
+              spn:                        'reg-prd-global-wrkycif (SPN)'
+              DATABRICKS_HOST:            'https://adb-2475554465308574.14.azuredatabricks.net'
+              TARGET_ENV:                 'preprod'
+
+
+  - stage: Prod
+    displayName: 'Production'
+    pool:
+      name: 'Shared-EU-Container-Linux-Python-S-Prod'
+    dependsOn: 
+      - Build
+      - Dev
+      - Preprod
+    variables:
+      - group: L-FEC-RADAR-PROD
+    condition: and(eq(variables['Build.SourceBranchName'], 'main'),succeeded('Build'))
+    jobs:
+      - deployment: Databricks_deployment_on_prod
+        displayName: 'Databricks deployment on Production environment'
+        environment: E-FEC-RADAR-PROD
+        strategy:
+           runOnce:
+             deploy:
+               steps:
+                 - download: none
+                  
+                 - template: changemanagement/changecreate.yml
+
+                 - template: changemanagement/changeclose.yml
+
+                 - template: artifacts/downloadartifacts.yml
+
+                 - task: qetza.replacetokens.replacetokens-task.replacetokens@6
+                   inputs:
+                     root: '$(System.ArtifactsDirectory)/drop/clusters/resources'
+                     sources: '*.yml'
+                     tokenPattern: 'custom'
+                     tokenPrefix: '(('
+                     tokenSuffix: '))'
+
+                 - template: databricks/DAB_template.yml
+                   parameters: 
+                     resourceGroupName:         'rg-wr-radar-prod'
+                     DatabricksWorkspaceName:   'dbws-wr-radar-prod'
+                     spn:                       'reg-prd-global-wrkycif (SPN)'
+                     DATABRICKS_HOST:           'https://adb-2426369368647006.6.azuredatabricks.net'
+                     TARGET_ENV:                'prod'
+                     

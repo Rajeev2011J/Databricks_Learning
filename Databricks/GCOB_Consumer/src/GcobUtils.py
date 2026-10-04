@@ -193,8 +193,13 @@ def read_gdp_defined_dataobjects(source , dataobject, path_prefix='', version_nu
 
 def write_to_unity_catalog(df, catalog, schema, table):
     #Generic function to write dataframes to Unity Catalog tables. 
+    from pyspark.sql.utils import AnalysisException
 
-    if not spark.catalog.databaseExists(f"{catalog}.{schema}"):
+    try:
+        if not spark.catalog.databaseExists(f"{catalog}.{schema}"):
+            raise ValueError(f"Target schema {catalog}.{schema} does not exist.")
+    except AnalysisException:
+        # Unity Catalog may reject nested namespace format — treat as non-existent
         raise ValueError(f"Target schema {catalog}.{schema} does not exist.")
 
     target_table = f"{catalog}.{schema}.{table}"

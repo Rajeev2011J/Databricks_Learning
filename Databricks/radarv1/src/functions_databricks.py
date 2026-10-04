@@ -3,11 +3,11 @@ from pyspark.sql.functions import coalesce, col
 from databricks.sdk.runtime import spark
 from pyspark.sql.utils import AnalysisException
 from datetime import datetime, timedelta
-from pyspark.dbutils import DBUtils
 import re
 import os
-from pyspark.dbutils import DBUtils
-dbutils = DBUtils()
+
+# Lazy dbutils — initialized on first use, tests can monkeypatch this
+dbutils = None
 
 
 def append_to_databricks_table(df: DataFrame, schema_name: str, table_name: str):
@@ -85,7 +85,10 @@ def load_from_gdp_parquet(producer: str, table: str, given_version: int = None):
 
     Only these producers are allowed: gcob, core-cbt
     """
-
+    global dbutils
+    if dbutils is None:
+        from databricks.sdk.runtime import dbutils as _real_dbutils
+        dbutils = _real_dbutils
 
     # validate producer (runtime check)
     allowed_producers = ['gcob', 'core-cbt', 'coj-card-mgmt-data', 'gcds', 'planet']

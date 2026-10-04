@@ -1,60 +1,101 @@
 # =============================================================================
 # requirements-dev.txt
-# Development and test dependencies for all Databricks Asset Bundles.
+# Test and development dependencies for all Databricks Asset Bundles.
 #
-# Install:  pip install -r requirements-dev.txt
+# THREE install scenarios — use the right one for your environment:
 #
-# Notes:
-#  - pyspark version must match the Spark version on your clusters.
-#    Current cluster runtime: 14.3 LTS  → Spark 3.5.0  → pyspark==3.5.0
-#    Unity Catalog clusters:  17.3 LTS  → Spark 3.5.2  → pyspark==3.5.2
-#    Pin to 3.5.0 for the widest compatibility across both cluster generations.
-#  - delta-spark version must be compatible with pyspark (see compatibility matrix:
-#    https://docs.delta.io/latest/releases.html)
-#  - databricks-sdk is needed so that `from databricks.sdk.runtime import ...`
-#    resolves at import time (we stub it, but the package must be present).
+#   LOCAL-DEV (laptop):
+#       pip install -r requirements-dev.txt
+#       Installs everything including pyspark and delta-spark.
+#
+#   ADO-CI (Azure DevOps Linux agent):
+#       Handled automatically by run_tests.sh --ci
+#       Uses Nexus internal PyPI when NEXUSCLOUD_PYPI_URL is available.
+#       Installs everything including pyspark and delta-spark.
+#
+#   DATABRICKS (cluster notebook):
+#       Use requirements-cluster.txt instead (see below).
+#       pyspark and delta-spark are provided by the cluster runtime —
+#       installing them here would conflict with the cluster version.
+#       The notebook runner (run_tests_notebook.py) handles this split.
+#
 # =============================================================================
 
 # ---------------------------------------------------------------------------
 # Core test runner
 # ---------------------------------------------------------------------------
 pytest==8.3.5
-pytest-cov==6.1.0          # coverage integration
-pytest-mock==3.14.0        # mocker fixture (wraps unittest.mock)
+pytest-cov==7.1.0
+pytest-mock==3.15.1
 
 # ---------------------------------------------------------------------------
-# PySpark — local mode for Spark unit tests
+# Azure DevOps integration
+# pytest-azurepipelines emits ##vso[] commands so results appear in the
+# ADO "Tests" tab. It is a no-op outside of ADO — safe to install everywhere.
 # ---------------------------------------------------------------------------
-pyspark==3.5.0
+pytest-azurepipelines==1.0.5
 
-# Delta Lake support in local Spark tests
+# ---------------------------------------------------------------------------
+# PySpark — local mode (LOCAL-DEV and ADO-CI only)
+# NOT installed on Databricks clusters — the runtime provides these.
+#
+# Version compatibility matrix (must keep in sync):
+#   pyspark 3.5.0  ↔  DBR 14.3 LTS  ↔  Python 3.11.x
+#   pyspark 3.5.2  ↔  DBR 17.3 LTS  ↔  Python 3.11.x
+#
+# IMPORTANT — Python version constraint (from POC discovery):
+#   Python 3.12+ breaks PySpark 3.5.x due to cloudpickle serialisation
+#   changes. The ADO pipeline pins Python 3.11.x via UsePythonVersion@0.
+#   Local developers must also use Python 3.11.x.
+#   Check with: python --version   (must show 3.11.x)
+#
+# Pinned to 3.5.5 for compatibility with delta-spark 3.2.1
+# delta-spark 3.2.1 requires pyspark>=3.5.3 and <3.6.0
+# ---------------------------------------------------------------------------
+pyspark==3.5.5
 delta-spark==3.2.1
 
 # ---------------------------------------------------------------------------
-# DataFrame assertion libraries
+# pytest-html — human-readable test execution report
+# Produces a self-contained HTML file showing pass/fail/skip per test with
+# durations, tracebacks, and system environment details.
+# Used by the pipeline to publish test-report.html as a build artefact.
 # ---------------------------------------------------------------------------
-# chispa: concise DataFrame equality assertions for PySpark
-chispa==0.10.2
+pytest-html==3.2.0
+pytest-metadata==3.0.0
 
 # ---------------------------------------------------------------------------
-# Databricks SDK — required so src imports resolve (we mock the runtime parts)
+# DataFrame assertion library
+# ---------------------------------------------------------------------------
+chispa==0.12.0
+
+# ---------------------------------------------------------------------------
+# Databricks SDK
+# Needed so `from databricks.sdk.runtime import ...` resolves at import time
+# (we stub the runtime objects, but the package namespace must exist).
+# Already present on Databricks clusters — safe to install; won't conflict.
 # ---------------------------------------------------------------------------
 databricks-sdk==0.32.0
 
 # ---------------------------------------------------------------------------
-# Build tools (wheel packaging used by setup.py in radarv1 / GCOB_Reportingv1)
+# YAML parsing — used by YAML-validation tests (clusters, PartyCatalog)
+# ---------------------------------------------------------------------------
+pyyaml==6.0.2
+
+# ---------------------------------------------------------------------------
+# Build tools
 # ---------------------------------------------------------------------------
 setuptools==75.8.2
 wheel==0.45.1
 
 # ---------------------------------------------------------------------------
-# Optional quality-of-life plugins
+# Optional plugins
 # ---------------------------------------------------------------------------
-pytest-sugar==1.0.0        # progress bar in terminal output
-pytest-xdist==3.6.1        # parallel test execution: pytest -n auto
-pytest-timeout==2.3.1      # mark tests with @pytest.mark.timeout(30)
+pytest-sugar==1.0.0        # progress bar
+pytest-xdist==3.6.1        # parallel: pytest -n auto  (unit tests only)
+pytest-timeout==2.4.0      # @pytest.mark.timeout(30)
 
 # ---------------------------------------------------------------------------
-# Linting / formatting (not required to run tests, useful in CI)
+# Linting (not required to run tests)
 # ---------------------------------------------------------------------------
 ruff==0.6.9

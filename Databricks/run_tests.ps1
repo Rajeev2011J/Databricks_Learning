@@ -139,8 +139,8 @@ if ($Bundle) {
     }
     Write-Host "[Filter] Bundle: $Bundle  →  $BundleTestPath" -ForegroundColor Magenta
     $PytestArgs += $BundleTestPath
-    # Also include shared tests/ infrastructure
-    $PytestArgs += Join-Path $ScriptDir "tests"
+    # Also include shared unit_tests/ infrastructure
+    $PytestArgs += Join-Path $ScriptDir "unit_tests"
 } else {
     # Default: discover from pyproject.toml testpaths
     Write-Host "[Filter] Running ALL bundles" -ForegroundColor Magenta

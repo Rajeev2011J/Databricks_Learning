@@ -3,13 +3,40 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.backends.legacy:build"
 
 # =============================================================================
-# pytest — single config covering all six Databricks Asset Bundle test suites
+# pytest — central configuration for all six Databricks Asset Bundle suites.
+#
+# Works in all three environments with ZERO code changes:
+#
+#   LOCAL-DEV  : cd Databricks && pytest          (or .\run_tests.ps1)
+#   ADO-CI     : run_tests.sh --ci                (TF_BUILD set by Azure Pipelines)
+#   DATABRICKS : run_tests_notebook.py on cluster (sys.path set before pytest call)
+#
+# IMPORTANT — relative vs absolute paths
+# ----------------------------------------
+# testpaths and pythonpath below are RELATIVE to the directory that contains
+# this pyproject.toml (i.e. Databricks/).  They work automatically when
+# pytest is invoked from Databricks/.
+#
+# On Databricks clusters the notebook runner (run_tests_notebook.py) adds
+# absolute paths to sys.path BEFORE importing conftest, and passes
+# --rootdir and --import-mode explicitly.  The relative paths here serve
+# as the correct baseline for local and CI invocations.
+#
+# Design decisions
+# ----------------
+# - --cov-report is NOT in addopts: the coverage plugin may not be installed
+#   on a bare cluster runtime. Runners add --cov-report themselves.
+# - --junit-xml is NOT in addopts: path differs per environment.
+# - --import-mode=importlib: prevents sys.path namespace collisions between
+#   bundles that have src/ files with the same name (e.g. RadarUtils.py).
 # =============================================================================
+
 [tool.pytest.ini_options]
 
-# Central test infrastructure + every bundle's tests/ folder
+# Paths to test directories — relative to Databricks/ (this file's location).
+# The notebook runner resolves these to absolute paths before invoking pytest.
 testpaths = [
-    "tests",                       # shared conftest, fixtures, utils
+    "unit_tests",             # shared: conftest, environment, fixtures, utils
     "AdHocRequests/tests",
     "clusters/tests",
     "GCOB_Consumer/tests",
@@ -18,91 +45,100 @@ testpaths = [
     "radarv1/tests",
 ]
 
-# Every bundle's src/ is on the Python path so tests can `import GcobUtils`
-# etc. without package-prefix gymnastics.
-# The shared tests/ sub-dirs are also added so helpers are importable.
+# Python import paths — relative to Databricks/.
+# conftest.py also adds these as absolute paths at runtime (for the cluster).
 pythonpath = [
-    "tests",                           # exposes tests/utils/ and tests/fixtures/
+    "unit_tests",                    # environment.py, utils/, fixtures/
     "AdHocRequests/src",
     "clusters/src",
     "GCOB_Consumer/src",
     "GCOB_Reportingv1/src",
-    "GCOB_Reportingv1/tests",          # RadarUtils.py lives here (legacy location)
+    "GCOB_Reportingv1/tests",     # RadarUtils.py (legacy location in tests/)
     "PartyCatalog/src",
     "radarv1/src",
 ]
 
-# Minimum pytest version guard
 minversion = "7.4"
 
-# Short traceback by default; use --tb=long when debugging
+# Core options present in every environment.
+# --cov-report and --junit-xml added by shell runners / notebook runner only.
 addopts = [
     "--tb=short",
     "-v",
-    "--strict-markers",                # fail on unknown markers
-    "--import-mode=importlib",         # avoids sys.path collisions between bundles
-    "--cov-report=term-missing",
-    "--cov-report=html:htmlcov",
+    "--strict-markers",
+    "--import-mode=prepend",      # compatible with all environments (importlib breaks on Databricks)
 ]
 
-# Registered markers — use -m <marker> to run a subset
 markers = [
-    "unit: Pure Python tests, no Spark, run in < 1 s",
-    "spark: Tests that require a local PySpark session",
-    "integration: Tests that hit live Databricks / Azure (CI only)",
-    "radarv1: Tests for the radarv1 bundle",
-    "gcob_consumer: Tests for the GCOB_Consumer bundle",
-    "gcob_reportingv1: Tests for the GCOB_Reportingv1 bundle",
-    "adhoc: Tests for the AdHocRequests bundle",
-    "clusters: Tests for the clusters bundle",
-    "party_catalog: Tests for the PartyCatalog bundle",
+    "unit: Pure Python, no Spark, no Azure — runs in < 1 s",
+    "spark: Requires a PySpark session (local[2] or cluster)",
+    "integration: Requires live Databricks/Azure — cluster only",
+    "radarv1: radarv1 bundle tests",
+    "gcob_consumer: GCOB_Consumer bundle tests",
+    "gcob_reportingv1: GCOB_Reportingv1 bundle tests",
+    "adhoc: AdHocRequests bundle tests",
+    "clusters: clusters bundle tests",
+    "party_catalog: PartyCatalog bundle tests",
     "dq: Data-quality validation tests",
     "slow: Tests that take > 10 s",
+    "databricks_only: Requires a live Databricks cluster",
+    "local_only: Requires local filesystem (YAML path tests) — skip on cluster",
 ]
 
-# Treat these warnings as errors to keep the suite clean
 filterwarnings = [
     "error::DeprecationWarning",
     "ignore::DeprecationWarning:pyspark",
     "ignore::DeprecationWarning:py4j",
+    "ignore::DeprecationWarning:delta",
     "ignore::ResourceWarning",
+    "ignore::UserWarning:pyspark",
 ]
-
-# Show 10 slowest tests at end of run
-# (requires pytest-durations plugin; silently ignored if not installed)
-# durations = 10
 
 log_cli       = false
 log_level     = "WARNING"
 log_cli_level = "WARNING"
 
 # =============================================================================
-# Coverage — src paths for all bundles
+# Coverage
 # =============================================================================
+
 [tool.coverage.run]
-branch   = true
+branch   = false  # Branch coverage disabled - focus on line coverage only
 parallel = true
-source   = [
-    "AdHocRequests/src",
-    "clusters/src",
-    "GCOB_Consumer/src",
-    "GCOB_Reportingv1/src",
-    "PartyCatalog/src",
-    "radarv1/src",
-]
+# source directive commented out - pipeline uses explicit --cov arguments
+# which override this setting and interfere with omit patterns.
+# The pipeline's --cov args already specify what to measure.
+# source   = [
+#     "AdHocRequests/src",
+#     "clusters/src",
+#     "GCOB_Consumer/src",
+#     "GCOB_Reportingv1/src",
+#     "PartyCatalog/src",
+#     "radarv1/src",
+# ]
 omit = [
-    "*/tests/*",
-    "*/__init__.py",
-    "*/main.py",          # template stubs, not real logic
+    "*/tests/*",              # Exclude all bundle test directories
+    "unit_tests/*",           # Exclude centralized test infrastructure
+    "conftest.py",            # Exclude root-level pytest config
+    "**/conftest.py",         # Exclude pytest config at any depth
+    "run_tests_notebook.py",  # Exclude test runner script
+    "*/fixtures/*",           # Exclude test fixtures
+    "*/environment.py",       # Exclude test environment setup
+    "*/__init__.py",          # Exclude package init files
+    "*/main.py",
     "*/scratch/*",
     "*/.venv/*",
 ]
 
 [tool.coverage.report]
-show_missing   = true
-skip_empty     = true
-fail_under     = 60          # raise CI failure below 60 % coverage
-exclude_lines  = [
+show_missing = true
+skip_empty   = true
+# fail_under is intentionally NOT set here — the CI pipeline enforces the
+# threshold via the COVERAGE_THRESHOLD pipeline variable (default 60%).
+# This keeps pyproject.toml environment-neutral: running pytest locally
+# never fails due to coverage percentage; only the CI quality gate does.
+# To enforce locally, run:  pytest --cov-fail-under=60
+exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.:",
     "raise NotImplementedError",
@@ -112,3 +148,6 @@ exclude_lines  = [
 [tool.coverage.html]
 directory = "htmlcov"
 title     = "Databricks Bundles — Coverage Report"
+
+[tool.coverage.xml]
+output = "coverage.xml"

@@ -98,6 +98,9 @@ def test_dataobject_uniqueness(
         log_fn(dataframe_name, rule_name, ",".join(columns), "Error", str(exc))
         raise
 
+# Prevent pytest from collecting these as test functions (they are DQ logic, not tests)
+test_dataobject_uniqueness.__test__ = False
+
 
 def test_dataobject_null_fields(
     df: DataFrame,
@@ -140,6 +143,9 @@ def test_dataobject_null_fields(
     except Exception as exc:  # noqa: BLE001
         log_fn(dataframe_name, rule_name, ",".join(columns), "Error", str(exc))
         raise
+
+# Prevent pytest from collecting this as a test function (it is DQ logic, not a test)
+test_dataobject_null_fields.__test__ = False
 
 
 def find_missing_clients(

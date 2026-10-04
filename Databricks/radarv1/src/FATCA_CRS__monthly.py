@@ -9,7 +9,10 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Cell 3
 import requests
+import tempfile
+import os
 
 # URL of the file to be downloaded
 url = "https://apps.irs.gov/app/fatcaFfiList/data/FFIListFull.csv"
@@ -18,13 +21,21 @@ url = "https://apps.irs.gov/app/fatcaFfiList/data/FFIListFull.csv"
 response = requests.get(url)
 response.raise_for_status()
 
-# Save the content to DBFS using dbutils
+# Save the content to DBFS using dbutils with secure temporary file
 dbfs_path = "dbfs:/FileStore/FATCA_FFI_List.csv"
-with open("/tmp/FATCA_FFI_List.csv", "wb") as f:
-    f.write(response.content)
 
-# Move the file from local tmp to DBFS
-dbutils.fs.mv("file:/tmp/FATCA_FFI_List.csv", dbfs_path)
+# Use tempfile to create a secure temporary file
+with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp_file:
+    tmp_file.write(response.content)
+    tmp_file_path = tmp_file.name
+
+try:
+    # Move the file from local tmp to DBFS
+    dbutils.fs.mv(f"file:{tmp_file_path}", dbfs_path)
+finally:
+    # Clean up the temporary file if it still exists
+    if os.path.exists(tmp_file_path):
+        os.remove(tmp_file_path)
 
 # Read the file and create a temp view
 spark.read.option("header", "true").csv(dbfs_path).createOrReplaceTempView("FATCA_FFI_List")

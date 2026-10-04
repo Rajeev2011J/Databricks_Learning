@@ -1,0 +1,82 @@
+    
+parameters:
+  - name: checkmarxProjectName
+    type: string
+    default: 'P-FEC-RADAR-ADB-87220-rw'
+
+  # --- Security Gate Thresholds ---
+  # Pipeline fails when vulnerability counts EXCEED these values.
+  # Checkmarx AST CLI requires threshold >= 1 (0 is rejected as invalid).
+  # Threshold of 1 = build breaks if MORE THAN 1 vulnerability found (closest to zero-tolerance).
+  # Scope:  Critical=1, High=1, Medium=1, Lows=100 (allowed)
+  # IaC:    Critical=1, High=1, Medium=1, Lows=100 (allowed)
+  # Phased rollout: adjust numberOfMediums if existing backlog blocks deployments.
+  - name: numberOfCriticals
+    type: number
+    default: 1
+  - name: numberOfHighs
+    type: number
+    default: 1
+  - name: numberOfMediums
+    type: number
+    default: 1
+  - name: numberOfLows
+    type: number
+    default: 100
+  - name: numberOfCriticalsIaC
+    type: number
+    default: 1
+  - name: numberOfHighsIaC
+    type: number
+    default: 1
+  - name: numberOfMediumsIaC
+    type: number
+    default: 1
+  - name: numberOfLowsIaC
+    type: number
+    default: 100
+ 
+steps:
+  - task: Rabobank Checkmarx@2
+    displayName: 'Checkmarx SAST Scan with Security Gates'
+    inputs:
+      CheckmarxService: 'Checkmarx-MSC'
+      mainCheckmarxProject: ${{ parameters.checkmarxProjectName }}
+      excludeFiles: '**/test/**,**/tests/**,*_test.go'
+      scanIaC: true
+      breakBuild: true
+      numberOfCriticals: ${{ parameters.numberOfCriticals }}
+      numberOfHighs: ${{ parameters.numberOfHighs }}
+      numberOfMediums: ${{ parameters.numberOfMediums }}
+      numberOfLows: ${{ parameters.numberOfLows }}
+      breakBuildIaC: true
+      numberOfCriticalsIaC: ${{ parameters.numberOfCriticalsIaC }}
+      numberOfHighsIaC: ${{ parameters.numberOfHighsIaC }}
+      numberOfMediumsIaC: ${{ parameters.numberOfMediumsIaC }}
+      numberOfLowsIaC: ${{ parameters.numberOfLowsIaC }}
+      debugMode: true
+  # - task: secret-scanning-task@0
+
+  # Checkmarx - Static Code Scanning: https://confluence.dev.rabobank.nl/display/ckx/Checkmarx+-+Static+Code+Scanning
+  # Build phase performs SAST scanning: https://confluence.dev.rabobank.nl/display/vsts/Build+phase+performs+SAST+scanning
+  # Pipeline Onboarding: https://confluence.dev.rabobank.nl/display/ckx/Checkmarx+-+Pipeline+Onboarding
+  #
+  # Security Gate Configuration:
+  #   Severity   | Threshold | Pipeline Action
+  #   -----------|-----------|----------------
+  #   Critical   | 1         | Fail if >1 found (CLI min is 1, 0 is rejected)
+  #   High       | 1         | Fail if >1 found (CLI min is 1, 0 is rejected)
+  #   Medium     | 1         | Fail if >1 found (phased rollout, adjust if backlog blocks deployments)
+  #   Low        | 100       | Allow - non-blocking
+  #
+  # IaC Security Gate (same thresholds for Infrastructure-as-Code scans):
+  #   Critical=1, High=1, Medium=1, Lows=100
+  #
+  # Phased Rollout Plan:
+  #   Phase 1: Block Critical and High (implemented after Sep 15th)
+  #   Phase 2: Block Medium after remediation backlog is addressed
+  #   To temporarily allow Medium vulnerabilities, pass numberOfMediums with a higher value:
+  #     - template: compliancyscans/checkmarx.yml
+  #       parameters:
+  #         numberOfMediums: 100  # allow existing Mediums during Phase 1
+  #         numberOfMediumsIaC: 100

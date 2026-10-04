@@ -1,0 +1,49 @@
+# =============================================================================
+# requirements-cluster.txt
+# Packages to %pip install inside a Databricks cluster notebook BEFORE
+# running the test suite.
+#
+# WHAT IS EXCLUDED AND WHY
+# -------------------------
+# pyspark      — provided by the cluster runtime; re-installing conflicts
+# delta-spark  — provided by the cluster runtime; re-installing conflicts
+# pyyaml       — pre-installed on Databricks LTS runtimes (6.x)
+#
+# HOW THIS FILE IS USED
+# ----------------------
+# The test runner notebook (run_tests_notebook.py) runs:
+#
+#     %pip install -r /path/to/requirements-cluster.txt -q
+#
+# before invoking pytest. This installs only the packages that are
+# genuinely missing from the cluster environment.
+#
+# NEXUS REGISTRY
+# ---------------
+# If the cluster is configured with the Nexus PyPI index (set via cluster
+# env vars or Databricks secrets), pip will resolve packages from there
+# automatically. No special flags are needed inside the notebook.
+# =============================================================================
+
+# Core test runner
+pytest==8.3.5
+pytest-cov==7.1.0
+pytest-mock==3.15.1
+pytest-nunit==1.0.7
+
+# Azure DevOps integration (no-op when not on ADO — safe on cluster too)
+pytest-azurepipelines==1.0.5
+
+# DataFrame assertions
+chispa==0.12.0
+
+# Databricks SDK (already on cluster, but pinning ensures the right version)
+databricks-sdk==0.32.0
+
+# YAML parsing (needed by config validation tests)
+# Note: Despite line 10's comment, pyyaml is NOT always pre-installed
+pyyaml==6.0.2
+
+# Optional quality-of-life
+pytest-sugar==1.0.0
+pytest-timeout==2.4.0

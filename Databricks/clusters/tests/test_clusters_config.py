@@ -28,6 +28,19 @@ import pytest
 import yaml
 
 # ---------------------------------------------------------------------------
+# Cluster-path tests are local_only: they read clusters_job.yml from the
+# local filesystem via Path(__file__).  On a Databricks cluster the working
+# directory is /databricks/driver and the YAML files are not present there.
+# Run with:  pytest -m "not local_only"  to skip on cluster.
+# ---------------------------------------------------------------------------
+from environment import IS_DATABRICKS
+
+pytestmark = [
+    pytest.mark.local_only,
+    pytest.mark.skipif(IS_DATABRICKS, reason="YAML file tests require local filesystem"),
+]
+
+# ---------------------------------------------------------------------------
 # Path to the resource file under test
 # ---------------------------------------------------------------------------
 _BUNDLE_ROOT   = Path(__file__).parents[1]          # …/clusters/
