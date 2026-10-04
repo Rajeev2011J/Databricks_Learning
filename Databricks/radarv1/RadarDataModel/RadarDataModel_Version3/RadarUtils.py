@@ -139,11 +139,9 @@ def Read_GDP_Defined_DataObjects(Source , Dataobject, path_prefix='',Load_Date='
             Load_Date = datetime.strptime(Load_Date, '%Y%m%d').strftime('%Y%m%d')
     elif Source == 'GCDS':
         if Load_Date=='':
-            # load_date = today - timedelta(days=1) if today.weekday() == 6 else today
             Load_Date = today.strftime('%Y%m%d')
         else:
             Load_Date = datetime.strptime(Load_Date, '%Y%m%d').strftime('%Y%m%d')
-            # Load_Date = Load_Date - timedelta(days=1) if today.weekday() == 6 else Load_Date
     elif Source == 'NLSVF':
         if Load_Date=='':
             Load_Date = (today - timedelta(days=2)).strftime('%Y-%m-%d')
@@ -248,8 +246,6 @@ def Read_GDP_Defined_DataObjects(Source , Dataobject, path_prefix='',Load_Date='
         # Detect partition folder containing Load_Date
         partition_base_path = f"{base_path}/{version}/data/"
         partition_folders = dbutils.fs.ls(partition_base_path)
-        # matching_partition = next((file.name for file in partition_folders if Load_Date in file.name),None)
-
         partition_folders_df = spark.createDataFrame(partition_folders)
 
         row = partition_folders_df.filter(col("name") != "_delta_log/") \
@@ -286,25 +282,6 @@ def Read_GDP_Defined_DataObjects(Source , Dataobject, path_prefix='',Load_Date='
             previous_date = (datetime.strptime(Load_Date, '%Y%m%d') - timedelta(days=1)).strftime('%Y%m%d')
             matching_partition = next((file.name for file in partition_folders if previous_date in file.name),None)
             latest_dt = None
-
-        #     for file in partition_folders:
-        #         folder_date_str = file.name[9:17]
-        #         folder_dt = datetime.strptime(folder_date_str, '%Y%m%d')
-        #         current_dt = datetime.strptime(Load_Date, '%Y%m%d')
-        #         if folder_dt <= current_dt:
-        #             if latest_dt is None or folder_dt > latest_dt:
-        #                 latest_dt = folder_dt
-        #                 matching_partition = file.name
-
-        # # The below lines will try to read t-1/t-2 data when a particular day's data is not available from Source for History Load
-        # if Load_Date!='':
-        #     if matching_partition is None:
-        #         previous_date = (datetime.strptime(Load_Date, '%Y%m%d') - timedelta(days=1)).strftime('%Y%m%d')
-        #         matching_partition = next((file.name for file in partition_folders if previous_date in file.name),None)
-
-        #     if matching_partition is None:
-        #         previous_date = (datetime.strptime(Load_Date, '%Y%m%d') - timedelta(days=2)).strftime('%Y%m%d')
-        #         matching_partition = next((file.name for file in partition_folders if previous_date in file.name),None)
         
         if not matching_partition:
             raise RuntimeError(
@@ -476,10 +453,6 @@ PRIMARY_KEY_MAP = {
 }
 
 FORCE_LIVE_TABLES = ["c_b_business_line_xref", "c_rbo_rel_type_xref"]
-
-#print(f"[OK] PRIMARY_KEY_MAP loaded with {len(PRIMARY_KEY_MAP)} table mappings")
-#print(f"   - {sum(1 for v in PRIMARY_KEY_MAP.values() if len(v) == 1)} tables with single primary key")
-#print(f"   - {sum(1 for v in PRIMARY_KEY_MAP.values() if len(v) > 1)} tables with composite primary key")
 
 # ========== HELPER FUNCTIONS ==========
 def get_base_table_name(table_name: str) -> str:
@@ -964,13 +937,320 @@ def merge_live_and_history(base_table_name: str, requested_date: str, verbose: b
     
     return df_merged
 
+# ========== METADATA-DRIVEN VALIDATION (SCHEMA REGISTRY PATTERN) ==========
+# Cache for validation rules (loaded once per session, read-only during parallel execution)
+_validation_cache = None
+
+# Metadata table name for validation rules
+VALIDATION_TABLE = "ranz_metadata.column_validations"
+
+def load_ranz_validations(spark_session, verbose: bool = False) -> Dict[str, List[Dict]]:
+    """Load column validation and filter rules from metadata table at runtime.
+    
+    Rules are cached for the session to avoid repeated reads.
+    The metadata table (ranz_metadata.column_validations) stores filter conditions,
+    transformations, and mandatory-column checks per table.
+    
+    Table schema:
+        table_name         STRING   - '_ALL_' for global rules, specific table name otherwise
+        column_name        STRING   - primary column for mandatory check and transformation target
+        is_mandatory       BOOLEAN  - if true, column must exist (error_level determines behavior)
+        filter_condition   STRING   - SQL WHERE clause expression (nullable)
+        transformation_expr STRING  - SQL expression for column transformation (nullable)
+        exclusion_tables   STRING   - comma-separated table names to exclude from this rule (nullable)
+        error_level        STRING   - 'ERROR' (raise) or 'WARNING' (skip)
+        priority           INT      - execution order within same table (lower = first)
+        effective_date     DATE     - when rule becomes active
+        expiry_date        DATE     - when rule expires (NULL = never)
+    
+    Returns:
+        Dict mapping table_name -> list of validation rule dicts.
+        Special key '_ALL_' contains rules applicable to all tables.
+    """
+    global _validation_cache
+    
+    if _validation_cache is not None:
+        if verbose:
+            print("[VALIDATIONS] Using cached validation rules")
+        return _validation_cache
+    
+    # Proactively check if the metadata table exists before trying to read it.
+    # This avoids AnalysisException propagation on normal (non-serverless) clusters
+    # where spark.table() can throw before the try/except can intercept it.
+    try:
+        catalog_name, schema_name, table_name_only = VALIDATION_TABLE.split('.')
+        table_exists = spark_session.catalog.tableExists(schema_name, table_name_only)
+    except Exception:
+        # catalog.tableExists may fail if schema doesn't exist either
+        table_exists = False
+    
+    if not table_exists:
+        print(f"[WARNING] Metadata table {VALIDATION_TABLE} does not exist.")
+        print("[WARNING] No validation rules will be applied. Run create_ranz_validation_table() to set up dynamic filtering.")
+        _validation_cache = {}
+        return _validation_cache
+    
+    try:
+        from pyspark.sql.functions import current_date as _current_date
+        
+        rules_df = spark_session.table(VALIDATION_TABLE)
+        # Filter to currently effective rules
+        rules_df = rules_df.filter(
+            (col("effective_date") <= _current_date()) &
+            (col("expiry_date").isNull() | (col("expiry_date") > _current_date()))
+        ).orderBy("priority")
+        
+        validations = {}
+        for row in rules_df.collect():
+            table = row['table_name']
+            if table not in validations:
+                validations[table] = []
+            validations[table].append({
+                'column_name': row['column_name'],
+                'is_mandatory': row['is_mandatory'],
+                'filter_condition': row['filter_condition'],
+                'transformation_expr': row['transformation_expr'] if 'transformation_expr' in row else None,
+                'error_level': row['error_level'],
+                'exclusion_tables': row['exclusion_tables'] if 'exclusion_tables' in row else None,
+                'priority': row['priority'] if 'priority' in row else 99,
+            })
+        
+        _validation_cache = validations
+        if verbose:
+            total_rules = sum(len(v) for v in validations.values())
+            print(f"[VALIDATIONS] Loaded {total_rules} validation rules for {len(validations)} table(s)")
+        
+        return _validation_cache
+        
+    except Exception as e:
+        print(f"[WARNING] Could not load validations from {VALIDATION_TABLE}: {e}")
+        print("[WARNING] No validation rules will be applied. Create the metadata table to enable dynamic filtering.")
+        _validation_cache = {}
+        return _validation_cache
+
+def apply_ranz_filters_dynamic(df: DataFrame, table_name: str, validations: Dict, verbose: bool = False) -> DataFrame:
+    """Apply metadata-driven validation rules and filters to a DataFrame.
+    
+    Processes rules in order:
+    1. Global rules (table_name = '_ALL_') - with exclusion check
+    2. Table-specific rules
+    
+    For each rule (sorted by priority):
+    - If column is mandatory and missing: raise error (ERROR) or skip (WARNING)
+    - If transformation_expr is set: apply transformation first (e.g., COALESCE)
+    - If filter_condition is set: apply as WHERE clause via SQL expression
+    
+    Args:
+        df: Input DataFrame
+        table_name: Base table name (without suffix)
+        validations: Validation rules dict from load_ranz_validations()
+        verbose: Enable detailed logging
+    """
+    from pyspark.sql.functions import expr as sql_expr
+    
+    name = table_name.lower()
+    applied_count = 0
+    
+    # Process global rules first (_ALL_), then table-specific
+    rule_sets = []
+    if '_ALL_' in validations:
+        rule_sets.append(('_ALL_', validations['_ALL_']))
+    if name in validations:
+        rule_sets.append((name, validations[name]))
+    
+    for rule_table, rules in rule_sets:
+        for rule in rules:
+            col_name = rule.get('column_name')
+            filter_cond = rule.get('filter_condition')
+            transform_expr = rule.get('transformation_expr')
+            error_level = rule.get('error_level', 'ERROR')
+            exclusions = rule.get('exclusion_tables')
+            
+            # Check exclusion list (comma-separated table names)
+            if exclusions:
+                excluded = [t.strip().lower() for t in exclusions.split(',')]
+                if name in excluded:
+                    if verbose:
+                        print(f"  [SKIP] Rule for {col_name} excluded for table {name}")
+                    continue
+            
+            # Check column existence (only if column_name is specified)
+            if col_name and col_name not in df.columns:
+                if rule.get('is_mandatory', False):
+                    if error_level == 'ERROR':
+                        raise ValueError(
+                            f"Mandatory column '{col_name}' not found in {table_name}. "
+                            f"Rule: {rule_table} (error_level=ERROR)"
+                        )
+                    else:
+                        print(f"[WARNING] Optional column '{col_name}' not found in {table_name}, skipping rule")
+                        continue
+                else:
+                    if verbose:
+                        print(f"  [SKIP] Column '{col_name}' not found, skipping filter")
+                    continue
+            
+            # Apply transformation (e.g., COALESCE) before filter
+            if transform_expr and col_name:
+                df = df.withColumn(col_name, sql_expr(transform_expr))
+                if verbose:
+                    print(f"  [TRANSFORM] {col_name} = {transform_expr}")
+            
+            # Apply filter condition as SQL expression
+            if filter_cond:
+                df = df.filter(sql_expr(filter_cond))
+                applied_count += 1
+                if verbose:
+                    print(f"  [FILTER] {filter_cond}")
+    
+    if verbose and applied_count > 0:
+        print(f"Applied {applied_count} filter rule(s) to {table_name}")
+    
+    return df
+
+def create_ranz_validation_table(spark_session, verbose: bool = False):
+    """Create the ranz_metadata.column_validations table with seed data.
+    
+    This function creates the metadata table (if it does not already exist) and
+    populates it with the initial validation rules that were previously hardcoded
+    in apply_ranz_filters(). Run this once to set up the schema registry.
+    
+    Uses CREATE TABLE IF NOT EXISTS so existing tables are never destroyed.
+    To modify rules, use UPDATE/INSERT/DELETE statements on the metadata table directly.
+    
+    Args:
+        spark_session: Spark session
+        verbose: Enable detailed logging
+    """
+    if verbose:
+        print(f"[SETUP] Creating {VALIDATION_TABLE}...")
+    
+    # Build ADLS path for the metadata table on the SARADAR storage account.
+    # The SARADAR storage account is authenticated via authenticate_storage_account()
+    # using the service principal credentials (application_id, service_credential, tenant_id).
+    saradar_storage = f'saradar{environment}'
+    saradar_container = 'radardatamodel'
+    table_location = f"abfss://{saradar_container}@{saradar_storage}.dfs.core.windows.net/ranz_metadata/column_validations"
+    
+    if verbose:
+        print(f"[SETUP] Table ADLS location: {table_location}")
+    
+    # Authenticate the SARADAR storage account in Spark before creating the external table.
+    # CREATE TABLE ... LOCATION requires explicit fs.azure.* conf to be set in the Spark session.
+    try:
+        authenticate_storage_account(saradar_storage)
+    except Exception as auth_err:
+        if verbose:
+            print(f"[SETUP] Storage authentication skipped (may be pre-configured): {auth_err}")
+    
+    # Create schema if not exists (required before table creation)
+    try:
+        spark_session.sql("CREATE SCHEMA IF NOT EXISTS ranz_metadata")
+        if verbose:
+            print(f"[SETUP] Schema 'ranz_metadata' created/verified")
+    except Exception as schema_err:
+        print(f"[ERROR] Failed to create schema 'ranz_metadata': {schema_err}")
+        raise
+    
+    # Create table in ADLS (safe: only creates if not exists)
+    try:
+        spark_session.sql(f"""
+            CREATE TABLE IF NOT EXISTS {VALIDATION_TABLE} (
+                table_name         STRING,
+                column_name        STRING,
+                is_mandatory       BOOLEAN,
+                filter_condition   STRING,
+                transformation_expr STRING,
+                exclusion_tables   STRING,
+                error_level        STRING,
+                priority           INT,
+                effective_date     DATE,
+                expiry_date        DATE
+            )
+            USING DELTA
+            LOCATION '{table_location}'
+            COMMENT 'Metadata-driven validation and filter rules for RANZ data loading. Add/modify rules here instead of changing RadarUtils.py code.'
+        """)
+        if verbose:
+            print(f"[SETUP] Table {VALIDATION_TABLE} created/verified")
+    except Exception as table_err:
+        print(f"[ERROR] Failed to create table {VALIDATION_TABLE} at LOCATION '{table_location}': {table_err}")
+        print(f"[ERROR] Ensure storage account '{saradar_storage}' is accessible and you have CREATE TABLE permissions.")
+        raise
+    
+    # Check if table already has data
+    existing_count = spark_session.table(VALIDATION_TABLE).count()
+    if existing_count > 0:
+        if verbose:
+            print(f"[SETUP] Table already has {existing_count} rows. Skipping seed data insertion.")
+        return
+    
+    # Seed with initial validation rules (migrated from hardcoded apply_ranz_filters)
+    seed_data = [
+        # Global rule: HUB_STATE_IND = 1 (applies to all tables except c_b_individual_birth_dt)
+        ('_ALL_', 'HUB_STATE_IND', True,
+         'HUB_STATE_IND = 1', None,
+         'c_b_individual_birth_dt', 'ERROR', 1, '2025-01-01', None),
+        
+        # c_b_party: coalesce NULL PARTY_STATUS_CD to 'AC' (transformation only, priority 1)
+        ('c_b_party', 'PARTY_STATUS_CD', False,
+         None, "COALESCE(PARTY_STATUS_CD, 'AC')",
+         None, 'ERROR', 1, '2025-01-01', None),
+        
+        # c_b_party: filter by source system and status (priority 2, runs after coalesce)
+        ('c_b_party', 'SRC_SYS_CD', False,
+         "SRC_SYS_CD IN ('T24RURAL', 'OMB', 'CMS', 'RABODIRECT') AND PARTY_STATUS_CD NOT IN ('DL', 'RD', 'WD')",
+         None, None, 'ERROR', 2, '2025-01-01', None),
+        
+        # c_b_contract: coalesce NULL LIFECYCLE_STATUS_CD to 'AC' (transformation only, priority 1)
+        ('c_b_contract', 'LIFECYCLE_STATUS_CD', False,
+         None, "COALESCE(LIFECYCLE_STATUS_CD, 'AC')",
+         None, 'ERROR', 1, '2025-01-01', None),
+        
+        # c_b_contract: filter by source system and lifecycle status (priority 2)
+        ('c_b_contract', 'SRC_SYS_CD', False,
+         "(SRC_SYS_CD = 'T24RURAL' OR SRC_SYS_CD = 'RABODIRECT' OR LOB_CD = 'RD') AND LIFECYCLE_STATUS_CD NOT IN ('DL', 'RD', 'WD')",
+         None, None, 'ERROR', 2, '2025-01-01', None),
+    ]
+    
+    from pyspark.sql.types import StructType, StructField, StringType, BooleanType, IntegerType, DateType
+    
+    schema = StructType([
+        StructField("table_name", StringType(), True),
+        StructField("column_name", StringType(), True),
+        StructField("is_mandatory", BooleanType(), True),
+        StructField("filter_condition", StringType(), True),
+        StructField("transformation_expr", StringType(), True),
+        StructField("exclusion_tables", StringType(), True),
+        StructField("error_level", StringType(), True),
+        StructField("priority", IntegerType(), True),
+        StructField("effective_date", StringType(), True),  # will convert below
+        StructField("expiry_date", DateType(), True),
+    ])
+    
+    seed_df = spark_session.createDataFrame(seed_data, schema=schema)
+    
+    # Convert date strings to actual dates
+    from pyspark.sql.functions import to_date as _to_date
+    seed_df = seed_df.withColumn("effective_date", _to_date(col("effective_date"), "yyyy-MM-dd"))
+    
+    # Write seed data directly to ADLS path
+    seed_df.write.format("delta").mode("append").save(table_location)
+    
+    if verbose:
+        print(f"[SETUP] Inserted {len(seed_data)} seed validation rules")
+        print(f"[SETUP] {VALIDATION_TABLE} is ready. Add new rules via INSERT statements.")
+    else:
+        print(f"[SETUP] {VALIDATION_TABLE} created with {len(seed_data)} initial rules.")
+
 # ========== HELPER FUNCTION FOR PARALLEL LOADING ==========
-def load_single_table_parallel(base_name: str, load_date: str, verbose: bool = False) -> dict:
+def load_single_table_parallel(base_name: str, load_date: str, validations: Dict = None, verbose: bool = False) -> dict:
     """Load a single table (thread-safe for parallel execution)
     
     Args:
         base_name: Base table name (without _xref or _hxrf suffix)
         load_date: Date string in 'YYYYMMDD' format
+        validations: Validation rules dict from load_ranz_validations() (loaded once before parallel execution)
         verbose: If False, minimal logging for better performance
     
     Returns:
@@ -982,41 +1262,11 @@ def load_single_table_parallel(base_name: str, load_date: str, verbose: bool = F
 
         
         
-        #Applied to Fetch Only Active Records from Ranz object based on the recommendations which was provided by RANZ team. 
-        from pyspark.sql.functions import col, coalesce, lit
-
-        def apply_ranz_filters(df, table_name):
-
-            name = table_name.lower()
-            # Apply HUB_STATE_IND filter only for tables that contain the column
-            if name!="c_b_individual_birth_dt":
-                df = df.filter(col("HUB_STATE_IND") == 1)
-
-            if name == "c_b_party":
-
-                # Replace NULL with AC in the actual column
-                df = df.withColumn("PARTY_STATUS_CD",coalesce(col("PARTY_STATUS_CD"), lit("AC")))
-
-                return df.filter(
-                    col("SRC_SYS_CD").isin("T24RURAL", "OMB", "CMS", "RABODIRECT")
-                    &
-                    ~col("PARTY_STATUS_CD").isin("DL", "RD", "WD")
-                )
-
-            elif name == "c_b_contract":
-
-                # Replace NULL with AC in the actual column
-                df = df.withColumn("LIFECYCLE_STATUS_CD",coalesce(col("LIFECYCLE_STATUS_CD"), lit("AC")))
-
-                return df.filter(
-                    ((col("SRC_SYS_CD").isin("T24RURAL"))|(col("SRC_SYS_CD").isin("RABODIRECT")|(col("LOB_CD") == "RD")))
-                    &
-                    (~col("LIFECYCLE_STATUS_CD").isin("DL", "RD", "WD"))
-                )
-
-            return df
-        
-        df_merged = apply_ranz_filters(df_merged, base_name)
+        # Apply metadata-driven validation rules and filters (replaces hardcoded apply_ranz_filters)
+        # If validations not provided, load them (fallback for direct calls)
+        if validations is None:
+            validations = load_ranz_validations(spark, verbose)
+        df_merged = apply_ranz_filters_dynamic(df_merged, base_name, validations, verbose)
         
         # Create temp view
         df_merged.createOrReplaceTempView(base_name)
@@ -1154,12 +1404,23 @@ def load_ranz_v4_rdm_tables(load_df: list, load_date: str, skip_invalid: bool = 
             tables_to_load.append(base_name)
             processed.add(base_name)  
 
+    # Load validation rules ONCE before parallel execution (thread-safe: read-only during parallel phase)
+    # Safety wrapper: if load_ranz_validations fails for any reason, default to empty dict
+    # so that parallel threads receive a valid (non-None) validations object.
+    try:
+        validations = load_ranz_validations(spark, verbose)
+        if validations is None:
+            validations = {}
+    except Exception as e:
+        print(f"[WARNING] Failed to load validation rules: {e}")
+        print("[WARNING] Continuing without validation rules.")
+        validations = {}
     
     results = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all tasks
         future_to_table = {
-            executor.submit(load_single_table_parallel, base_name, load_date, verbose): base_name
+            executor.submit(load_single_table_parallel, base_name, load_date, validations, verbose): base_name
             for base_name in tables_to_load
         }
         

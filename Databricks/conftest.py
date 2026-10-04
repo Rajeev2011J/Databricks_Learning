@@ -62,29 +62,39 @@ def _stub_databricks_runtime() -> None:
     """
     Pre-register fake Databricks packages in sys.modules.
     """
-    runtime_stub = types.ModuleType("databricks.sdk.runtime")
+    # Package name constants (SonarQube python:S1192 - avoid string literal duplication)
+    _PKG_DATABRICKS = "databricks"
+    _PKG_DATABRICKS_SDK = "databricks.sdk"
+    _PKG_DATABRICKS_SDK_RUNTIME = "databricks.sdk.runtime"
+    _PKG_DATABRICKS_CONNECT = "databricks.connect"
+    _PKG_DATABRICKS_AUTOML = "databricks.automl"
+    _PKG_DATABRICKS_FEATURE_STORE = "databricks.feature_store"
+    _PKG_DATABRICKS_DLT = "databricks_dlt"
+    _PKG_PYSPARK_DBUTILS = "pyspark.dbutils"
+    
+    runtime_stub = types.ModuleType(_PKG_DATABRICKS_SDK_RUNTIME)
     runtime_stub.spark   = MagicMock(name="stub_spark")
     runtime_stub.dbutils = MagicMock(name="stub_dbutils")
 
     stubs: dict[str, Any] = {
-        "databricks":               MagicMock(name="databricks"),
-        "databricks.sdk":           MagicMock(name="databricks.sdk"),
-        "databricks.sdk.runtime":   runtime_stub,
-        "databricks.connect":       MagicMock(name="databricks.connect"),
-        "databricks.automl":        MagicMock(name="databricks.automl"),
-        "databricks.feature_store": MagicMock(name="databricks.feature_store"),
-        "databricks_dlt":           MagicMock(name="databricks_dlt"),
-        "pyspark.dbutils":          MagicMock(name="pyspark.dbutils"),
+        _PKG_DATABRICKS:               MagicMock(name=_PKG_DATABRICKS),
+        _PKG_DATABRICKS_SDK:           MagicMock(name=_PKG_DATABRICKS_SDK),
+        _PKG_DATABRICKS_SDK_RUNTIME:   runtime_stub,
+        _PKG_DATABRICKS_CONNECT:       MagicMock(name=_PKG_DATABRICKS_CONNECT),
+        _PKG_DATABRICKS_AUTOML:        MagicMock(name=_PKG_DATABRICKS_AUTOML),
+        _PKG_DATABRICKS_FEATURE_STORE: MagicMock(name=_PKG_DATABRICKS_FEATURE_STORE),
+        _PKG_DATABRICKS_DLT:           MagicMock(name=_PKG_DATABRICKS_DLT),
+        _PKG_PYSPARK_DBUTILS:          MagicMock(name=_PKG_PYSPARK_DBUTILS),
     }
 
     for name, stub in stubs.items():
         if name not in sys.modules:
             sys.modules[name] = stub
 
-    sys.modules["databricks.connect"].DatabricksSession = MagicMock(
+    sys.modules[_PKG_DATABRICKS_CONNECT].DatabricksSession = MagicMock(
         name="DatabricksSession"
     )
-    sys.modules["pyspark.dbutils"].DBUtils = MagicMock(name="DBUtils")
+    sys.modules[_PKG_PYSPARK_DBUTILS].DBUtils = MagicMock(name="DBUtils")
 
 
 if NEEDS_RUNTIME_STUBS:
@@ -153,7 +163,7 @@ def _make_cluster_session():
         if session is not None:
             return session
 
-    return SparkSession.builder.getOrCreate()
+    return SparkSession.builder.getOrCreate()  # NOSONAR - On Databricks cluster, master and appName are pre-configured by runtime
 
 
 @pytest.fixture(scope="session")
@@ -192,7 +202,7 @@ _FAKE_ENV: dict[str, str] = {
     "subscriptionId":                 "test-subscription-id",
     "resourceGroup_API":              "test-resource-group",
     "NEXUSCLOUD_USERNAME":            "test-nexus-user",
-    "NEXUSCLOUD_PASSWORD":            "test-nexus-pass",  # noqa: S105  (fake)
+    "NEXUSCLOUD_PASSWORD":            "test-nexus-pass",  # noqa: S105  # NOSONAR - fake test credential
 }
 
 # ---------------------------------------------------------------------------

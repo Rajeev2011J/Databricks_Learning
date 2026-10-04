@@ -49,10 +49,10 @@ pytest-azurepipelines==1.0.5
 #   Local developers must also use Python 3.11.x.
 #   Check with: python --version   (must show 3.11.x)
 #
-# Pinned to 3.5.0 for widest cross-DBR compatibility.
-# delta-spark 3.2.1 is the compatible version for Spark 3.5.x.
+# Pinned to 3.5.5 for compatibility with delta-spark 3.2.1
+# delta-spark 3.2.1 requires pyspark>=3.5.3 and <3.6.0
 # ---------------------------------------------------------------------------
-pyspark==3.5.0
+pyspark==3.5.5
 delta-spark==3.2.1
 
 # ---------------------------------------------------------------------------

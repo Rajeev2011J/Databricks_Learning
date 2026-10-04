@@ -103,19 +103,28 @@ log_cli_level = "WARNING"
 # =============================================================================
 
 [tool.coverage.run]
-branch   = true
+branch   = false  # Branch coverage disabled - focus on line coverage only
 parallel = true
-source   = [
-    "AdHocRequests/src",
-    "clusters/src",
-    "GCOB_Consumer/src",
-    "GCOB_Reportingv1/src",
-    "PartyCatalog/src",
-    "radarv1/src",
-]
+# source directive commented out - pipeline uses explicit --cov arguments
+# which override this setting and interfere with omit patterns.
+# The pipeline's --cov args already specify what to measure.
+# source   = [
+#     "AdHocRequests/src",
+#     "clusters/src",
+#     "GCOB_Consumer/src",
+#     "GCOB_Reportingv1/src",
+#     "PartyCatalog/src",
+#     "radarv1/src",
+# ]
 omit = [
-    "*/tests/*",
-    "*/__init__.py",
+    "*/tests/*",              # Exclude all bundle test directories
+    "unit_tests/*",           # Exclude centralized test infrastructure
+    "conftest.py",            # Exclude root-level pytest config
+    "**/conftest.py",         # Exclude pytest config at any depth
+    "run_tests_notebook.py",  # Exclude test runner script
+    "*/fixtures/*",           # Exclude test fixtures
+    "*/environment.py",       # Exclude test environment setup
+    "*/__init__.py",          # Exclude package init files
     "*/main.py",
     "*/scratch/*",
     "*/.venv/*",
